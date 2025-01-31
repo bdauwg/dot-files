@@ -1,0 +1,29 @@
+# colors:
+#   body: none
+#   date: black
+#   tags: yellow
+#   title: cyan
+colors:
+  body: none
+  date: magenta
+  tags: red
+  title: blue
+default_hour: 9
+default_minute: 0
+editor: "nvim"
+encrypt: false
+highlight: true
+indent_character: '|'
+journals:
+  default:
+    # journal: /home/bramos/.local/share/jrnl/journal.txt
+    journal: /home/bramos/Documents/note/daily.md
+    template: /home/bramos/.config/jrnl/md_template.md
+  work:
+    journal: /home/bramos/Documents/note/log.md
+    template: /home/bramos/.config/jrnl/worklog.md
+linewrap: 79
+tagsymbols: '#@'
+template: true
+timeformat: '%F %r'
+version: v4.1
