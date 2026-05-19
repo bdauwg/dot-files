@@ -5,18 +5,20 @@ vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- {{{ [[ Setting options ]] vim "set"'s
 -- See `:help vim.o`
 -- NOTE: You can change these options as you wish!
 --  For more options, you can see `:help option-list`
+-- make sure colors are enabled for complicated remote sessions
+vim.opt.termguicolors = true
 
 -- Make line numbers default
 vim.opt.number = true
 -- You can also add relative line numbers, to help with jumping.
 --  Experiment for yourself to see if you like it!
--- vim.opt.relativenumber = true
+vim.opt.relativenumber = true
 
 -- Enable mouse mode, can be useful for resizing splits for example!
 vim.opt.mouse = "a"
@@ -69,7 +71,7 @@ vim.opt.inccommand = "split"
 vim.opt.cursorline = true
 
 -- Minimal number of screen lines to keep above and below the cursor.
-vim.opt.scrolloff = 10
+vim.opt.scrolloff = 3
 -- }}} end basic setting options
 -- {{{ [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
@@ -100,12 +102,96 @@ vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" }
 
 -- Keybinds to make split navigation easier.
 --  Use CTRL+<hjkl> to switch between windows
---
 --  See `:help wincmd` for a list of all window commands
 vim.keymap.set("n", "<C-left>", "<C-w><C-h>", { desc = "Move focus to the left window" })
 vim.keymap.set("n", "<C-right>", "<C-w><C-l>", { desc = "Move focus to the right window" })
 vim.keymap.set("n", "<C-down>", "<C-w><C-j>", { desc = "Move focus to the lower window" })
 vim.keymap.set("n", "<C-up>", "<C-w><C-k>", { desc = "Move focus to the upper window" })
+
+-- Keybinds to for automatic dating.
+vim.keymap.set(
+	"n",
+	"<leader>dd",
+	'i<C-R>=strftime("%a %Y-%m-%d %H:%M:%S")<CR><Esc>',
+	{ desc = "[d]ate [d]ate (system date)" }
+)
+vim.keymap.set(
+	"n",
+	"<leader>dj",
+	'i<C-R>=strftime("%Y-%m-%d %I:%M:%S %p")<CR><Esc>',
+	{ desc = "[d]ate [j]ournal date" }
+)
+
+-- HACK: Manage Markdown tasks in Neovim similar to Obsidian | Telescope to List Completed and Pending Tasks
+-- https://youtu.be/59hvZl077hM
+-- https://github.com/linkarzu/dotfiles-latest/blob/main/neovim/neobean/lua/config/keymaps.lua
+--
+-- Iterate through incomplete tasks in telescope
+-- You can confirm in your teminal lamw25wmal with:
+-- rg "^\s*-\s\[ \]" test-markdown.md
+vim.keymap.set("n", "<leader>tt", function()
+	require("telescope.builtin").grep_string(require("telescope.themes").get_ivy({
+		prompt_title = "Incomplete Tasks (directory)",
+		search = "^\\s*- \\[ \\]", -- also match blank spaces at the beginning
+		search_dirs = { vim.fn.getcwd() }, -- Restrict search to the current working directory
+		use_regex = true, -- Enable regex for the search term
+		initial_mode = "normal", -- Start in normal mode
+		layout_config = {
+			preview_width = 0.5, -- Adjust preview width
+		},
+		additional_args = function()
+			return { "--no-ignore" } -- Include files ignored by .gitignore
+		end,
+	}))
+end, { desc = "[t]Search for incomplete tasks" })
+-- Iterate through completed tasks in telescope lamw25wmal
+vim.keymap.set("n", "<leader>tc", function()
+	require("telescope.builtin").grep_string(require("telescope.themes").get_ivy({
+		prompt_title = "Completed Tasks",
+		search = "^\\s*- \\[x\\]", -- also match blank spaces at the beginning
+		search_dirs = { vim.fn.getcwd() }, -- Restrict search to the current working directory
+		use_regex = true, -- Enable regex for the search term
+		initial_mode = "normal", -- Start in normal mode
+		layout_config = {
+			preview_width = 0.5, -- Adjust preview width
+		},
+		additional_args = function()
+			return { "--no-ignore" } -- Include files ignored by .gitignore
+		end,
+	}))
+end, { desc = "[c]Search for completed tasks" })
+vim.keymap.set("n", "<leader>td", function()
+	require("telescope.builtin").grep_string(require("telescope.themes").get_ivy({
+		prompt_title = "Incomplete Tasks (file)",
+		search = "^\\s*- \\[ \\]", -- also match blank spaces at the beginning
+		search_dirs = { vim.fn.expand("%:p") }, -- Restrict search to the current working directory
+		use_regex = true, -- Enable regex for the search term
+		initial_mode = "normal", -- Start in normal mode
+		layout_config = {
+			preview_width = 0.5, -- Adjust preview width
+		},
+		additional_args = function()
+			return { "--no-ignore" } -- Include files ignored by .gitignore
+		end,
+	}))
+end, { desc = "[d]Search for completed tasks" })
+
+-- Override help key for automatic pwd copy utility
+vim.keymap.set("n", "<F1>", "<Nop>", { silent = true })
+vim.keymap.set("i", "<F1>", "<Nop>", { silent = true })
+vim.keymap.set("v", "<F1>", "<Nop>", { silent = true })
+
+vim.keymap.set("n", "<F1>", function()
+	local path = vim.fn.expand("%:p")
+	vim.fn.setreg("+", path)
+	print("Copied: " .. path)
+end, { desc = "Copy full file path" })
+
+-- Command for reloading init.lua
+vim.api.nvim_create_user_command("Reinit", function()
+	dofile(vim.env.MYVIMRC)
+	print("Reloaded " .. vim.env.MYVIMRC)
+end, {})
 
 -- }}}
 -- [[ Basic Autocommands ]]
@@ -242,19 +328,21 @@ require("lazy").setup({
 			},
 		},
 	},
-	{
-		-- Set lualine as statusline
-		"nvim-lualine/lualine.nvim",
-		-- See `:help lualine.txt`
-		opts = {
-			options = {
-				icons_enabled = true,
-				theme = "rose-pine",
-				component_separators = "|",
-				section_separators = "",
-			},
-		},
-	},
+	-- {
+	-- 	-- Set lualine as statusline
+	-- 	"nvim-lualine/lualine.nvim",
+	-- 	-- See `:help lualine.txt`
+	-- 	opts = {
+	-- 		options = {
+	-- 			icons_enabled = true,
+	-- 			-- theme = "rose-pine",
+	-- 			theme = "moonfly",
+	-- 			-- theme = "github_dark_default",
+	-- 			component_separators = "|",
+	-- 			section_separators = "",
+	-- 		},
+	-- 	},
+	-- },
 
 	-- "gc" to comment visual regions/lines
 	{ "numToStr/Comment.nvim", opts = {} },
@@ -316,12 +404,23 @@ require("lazy").setup({
 				-- You can put your default mappings / updates / etc. in here
 				--  All the info you're looking for is in `:help telescope.setup()`
 				--
-				-- defaults = {
-				--   mappings = {
-				--     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
-				--   },
-				-- },
-				-- pickers = {}
+				defaults = {
+					mappings = {
+						i = {
+							--     ['<c-enter>'] = 'to_fuzzy_refine',
+							["<C-u>"] = false,
+						},
+					},
+				},
+				pickers = {
+					buffers = {
+						mappings = {
+							i = {
+								["<C-u>"] = false,
+							},
+						},
+					},
+				},
 				extensions = {
 					["ui-select"] = {
 						require("telescope.themes").get_dropdown(),
@@ -545,7 +644,14 @@ require("lazy").setup({
 			--  - settings (table): Override the default settings passed when initializing the server.
 			--        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
 			local servers = {
-				-- clangd = {},
+
+				clangd = {
+					cmd = {
+						"clangd",
+						"--background-index",
+						"--clang-tidy",
+					},
+				},
 				-- gopls = {},
 				-- pyright = {},
 				-- rust_analyzer = {},
@@ -716,7 +822,8 @@ require("lazy").setup({
 					-- Accept ([y]es) the completion.
 					--  This will auto-import if your LSP supports it.
 					--  This will expand snippets if the LSP sent a snippet.
-					["<CR>"] = cmp.mapping.confirm({ select = true }),
+					-- ["<CR>"] = cmp.mapping.confirm({ select = true }),
+					["<C-y>"] = cmp.mapping.confirm({ select = true }),
 
 					-- If you prefer more traditional completion keymaps,
 					-- you can uncomment the following lines
@@ -809,10 +916,10 @@ require("lazy").setup({
 
 			local p = require("rose-pine.palette")
 
-			vim.cmd.colorscheme("rose-pine")
-			vim.api.nvim_set_hl(0, "Normal", { fg = "none", bg = "none" })
-			vim.api.nvim_set_hl(0, "NormalFloat", { fg = "none", bg = "none" })
-			vim.api.nvim_set_hl(0, "NormalNC", { fg = "none", bg = "none" })
+			-- vim.cmd.colorscheme("rose-pine")
+			-- vim.api.nvim_set_hl(0, "Normal", { fg = "none", bg = "none" })
+			-- vim.api.nvim_set_hl(0, "NormalFloat", { fg = "none", bg = "none" })
+			-- vim.api.nvim_set_hl(0, "NormalNC", { fg = "none", bg = "none" })
 			-- vim.api.nvim_set_hl(0, 'String', { fg = p.rose, bg = 'none' })
 			-- vim.api.nvim_set_hl(0, 'Number', { fg = p.ros, bg = 'none' })
 			-- vim.api.nvim_set_hl(0, 'Float', { fg = p.rose, bg = 'none' })
@@ -835,6 +942,27 @@ require("lazy").setup({
 			-- vim.api.nvim_set_hl(0, "Normal", { fg = "none", bg = "none" })
 			-- vim.api.nvim_set_hl(0, "NormalFloat", { fg = "none", bg = "none" })
 			-- vim.api.nvim_set_hl(0, "NormalNC", { fg = "none", bg = "none" })
+		end,
+	},
+	{
+		"projekt0n/github-nvim-theme",
+		name = "github-theme",
+		lazy = false, -- make sure we load this during startup if it is your main colorscheme
+		priority = 1000, -- make sure to load this before all the other start plugins
+		config = function()
+			require("github-theme").setup({})
+			-- vim.cmd.colorscheme("github_dark_default")
+		end,
+	},
+	{
+		"bluz71/vim-moonfly-colors",
+		name = "moonfly",
+		lazy = false,
+		priority = 1000,
+		config = function()
+			-- require("moonfly").setup({})
+			vim.g.moonflyTransparent = true
+			vim.cmd.colorscheme("moonfly")
 		end,
 	},
 	-- }}} end colorschemes
@@ -860,25 +988,17 @@ require("lazy").setup({
 					name = "note",
 					path = "~/Documents/note",
 				},
-				{
-					name = "tmpnote",
-					-- path = "/tmp",
-					path = function()
-						if vim.fs.dirname(vim.api.nvim_buf_get_name(0)) == "/tmp" then
-							vim.cmd("cd /home/bramos/Documents/note")
-							return assert("~/Documents/note")
-						end
-						return false
-					end,
-					-- strict = true,
-					-- overrides = {
-					-- 	name = "note",
-					-- 	path = "~/Documents/note",
-					-- 	root = "~/Documents/note",
-					-- 	notes_subdir = "~/Documents/note",
-					-- 	new_notes_location = "~/Documents/note",
-					-- },
-				},
+				-- {
+				-- 	name = "tmpnote",
+				-- 	-- path = "/tmp",
+				-- 	path = function()
+				-- 		if vim.fs.dirname(vim.api.nvim_buf_get_name(0)) == "/tmp" then
+				-- 			vim.cmd("cd /home/bramos/Documents/note")
+				-- 			return assert("~/Documents/note")
+				-- 		end
+				-- 		return false
+				-- 	end,
+				-- },
 			},
 		},
 		completion = { nvim_cmp = true, min_chars = 2 },
@@ -888,6 +1008,12 @@ require("lazy").setup({
 					return require("obsidian").util.gf_passthrough()
 				end,
 				opts = { noremap = false, expr = true, buffer = true },
+			},
+			["<cr>"] = {
+				action = function()
+					return require("obsidian").util.smart_action()
+				end,
+				opts = { buffer = true, expr = true },
 			},
 		},
 		config = function(_, opts)
@@ -936,8 +1062,8 @@ require("lazy").setup({
 			--  You could remove this setup call if you don't like it,
 			--  and try some other statusline plugin
 			-- set use_icons to true if you have a Nerd Font
-			-- local statusline = require 'mini.statusline'
-			-- statusline.setup { use_icons = vim.g.have_nerd_font }
+			local statusline = require("mini.statusline")
+			statusline.setup({ use_icons = vim.g.have_nerd_font })
 
 			-- You can configure sections in the statusline by overriding their
 			-- default behavior. For example, here we set the section for
@@ -1013,7 +1139,7 @@ require("lazy").setup({
 	-- require 'kickstart.plugins.lint',
 	-- require 'kickstart.plugins.autopairs',
 	-- require 'kickstart.plugins.neo-tree',
-	-- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
+	require("kickstart.plugins.gitsigns"), -- adds gitsigns recommend keymaps
 
 	-- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
 	--    This is the easiest way to modularize your config.
@@ -1021,6 +1147,37 @@ require("lazy").setup({
 	--  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
 	--    For additional information, see `:help lazy.nvim-lazy.nvim-structuring-your-plugins`
 	-- { import = 'custom.plugins' },
+	{
+		"HiPhish/rainbow-delimiters.nvim",
+		event = "VeryLazy",
+		config = function()
+			local rainbow_delimiters = require("rainbow-delimiters")
+
+			vim.g.rainbow_delimiters = {
+				strategy = {
+					[""] = rainbow_delimiters.strategy["global"],
+					vim = rainbow_delimiters.strategy["local"],
+				},
+				query = {
+					[""] = "rainbow-delimiters",
+					lua = "rainbow-blocks",
+				},
+				priority = {
+					[""] = 110,
+					lua = 210,
+				},
+				highlight = {
+					"RainbowDelimiterRed",
+					"RainbowDelimiterYellow",
+					"RainbowDelimiterBlue",
+					"RainbowDelimiterOrange",
+					"RainbowDelimiterGreen",
+					"RainbowDelimiterViolet",
+					"RainbowDelimiterCyan",
+				},
+			}
+		end,
+	},
 }, {
 	ui = {
 		-- If you are using a Nerd Font: set icons to an empty table which will use the
@@ -1228,8 +1385,7 @@ require("oil").setup({
 		border = "rounded",
 	},
 })
-vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory" })
--- }}} end configure oil
+vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory" }) -- }}} end configure oil
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
