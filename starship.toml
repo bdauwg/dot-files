@@ -240,7 +240,7 @@ symbol = "∁ "
 format = " c [$symbol($version(-$name))]($style)"
 
 [conda]
-symbol = "◯ "
+symbol = "🐍 "
 format = " conda [$symbol$environment]($style)"
 
 [dart]

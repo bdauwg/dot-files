@@ -30,6 +30,18 @@ vim.opt.showmode = false
 --  Schedule the setting after `UiEnter` because it can increase startup-time.
 --  Remove this option if you want your OS clipboard to remain independent.
 --  See `:help 'clipboard'`
+--
+vim.g.clipboard = {
+	name = "OSC 52",
+	copy = {
+		["+"] = require("vim.ui.clipboard.osc52").copy("+"),
+		["*"] = require("vim.ui.clipboard.osc52").copy("*"),
+	},
+	paste = {
+		["+"] = require("vim.ui.clipboard.osc52").paste("+"),
+		["*"] = require("vim.ui.clipboard.osc52").paste("*"),
+	},
+}
 vim.schedule(function()
 	vim.opt.clipboard = "unnamedplus"
 end)
@@ -711,7 +723,6 @@ require("lazy").setup({
 			})
 		end,
 	},
-
 	{ -- Autoformat
 		"stevearc/conform.nvim",
 		event = { "BufWritePre" },
@@ -728,34 +739,56 @@ require("lazy").setup({
 		},
 		opts = {
 			notify_on_error = false,
+
 			format_on_save = function(bufnr)
-				-- Disable "format_on_save lsp_fallback" for languages that don't
-				-- have a well standardized coding style. You can add additional
-				-- languages here or re-enable it for the disabled ones.
-				local disable_filetypes = { c = true, cpp = true }
+				local disable_filetypes = {}
 				local lsp_format_opt
+
 				if disable_filetypes[vim.bo[bufnr].filetype] then
 					lsp_format_opt = "never"
 				else
 					lsp_format_opt = "fallback"
 				end
+
 				return {
 					timeout_ms = 500,
 					lsp_format = lsp_format_opt,
 				}
 			end,
+
 			formatters_by_ft = {
 				lua = { "stylua" },
-				-- Conform can also run multiple formatters sequentially
-				-- python = { "isort", "black" },
-				--
-				-- You can use 'stop_after_first' to run the first available formatter from the list
-				-- javascript = { "prettierd", "prettier", stop_after_first = true },
+
+				-- Uncrustify
+				c = { "uncrustify" },
+				cpp = { "uncrustify" },
+				h = { "uncrustify" },
+				hpp = { "uncrustify" },
+			},
+
+			formatters = {
+				uncrustify = {
+					command = "uncrustify",
+					args = {
+						"-c",
+						"/home/bramos/ws/percv_workspace/ard_conan_tools/conan_configs/extensions/configs/uncrustify.cfg",
+						"--no-backup",
+						"-q",
+						"-l",
+						function(_, ctx)
+							local ft = vim.bo[ctx.buf].filetype
+							if ft == "cpp" or ft == "hpp" then
+								return "CPP"
+							end
+							return "C"
+						end,
+					},
+					stdin = true,
+				},
 			},
 		},
 	},
-
-	{ -- Autocompletion
+	{ -- Autocompletion {{{
 		"hrsh7th/nvim-cmp",
 		event = "InsertEnter",
 		dependencies = {
@@ -775,12 +808,12 @@ require("lazy").setup({
 					-- `friendly-snippets` contains a variety of premade snippets.
 					--    See the README about individual language/framework/plugin snippets:
 					--    https://github.com/rafamadriz/friendly-snippets
-					-- {
-					--   'rafamadriz/friendly-snippets',
-					--   config = function()
-					--     require('luasnip.loaders.from_vscode').lazy_load()
-					--   end,
-					-- },
+					{
+						"rafamadriz/friendly-snippets",
+						config = function()
+							require("luasnip.loaders.from_vscode").lazy_load()
+						end,
+					},
 				},
 			},
 			"saadparwaiz1/cmp_luasnip",
@@ -870,7 +903,7 @@ require("lazy").setup({
 				},
 			})
 		end,
-	},
+	}, -- Autocompletion }}}
 
 	-- {{{ lazyvim loader: [[ COLORSCHEMES ]]
 	{
@@ -915,16 +948,6 @@ require("lazy").setup({
 			})
 
 			local p = require("rose-pine.palette")
-
-			-- vim.cmd.colorscheme("rose-pine")
-			-- vim.api.nvim_set_hl(0, "Normal", { fg = "none", bg = "none" })
-			-- vim.api.nvim_set_hl(0, "NormalFloat", { fg = "none", bg = "none" })
-			-- vim.api.nvim_set_hl(0, "NormalNC", { fg = "none", bg = "none" })
-			-- vim.api.nvim_set_hl(0, 'String', { fg = p.rose, bg = 'none' })
-			-- vim.api.nvim_set_hl(0, 'Number', { fg = p.ros, bg = 'none' })
-			-- vim.api.nvim_set_hl(0, 'Float', { fg = p.rose, bg = 'none' })
-			-- vim.api.nvim_set_hl(0, 'Constant', { fg = p.rose, bg = 'none' })
-			-- vim.api.nvim_set_hl(0, 'Character', { fg = p.rose, bg = 'none' })
 		end,
 	},
 	{
@@ -965,12 +988,50 @@ require("lazy").setup({
 			vim.cmd.colorscheme("moonfly")
 		end,
 	},
+	{
+		"rebelot/kanagawa.nvim",
+		lazy = false,
+		priority = 1000,
+		config = function()
+			require("kanagawa").setup({
+				-- dimInactive = true,
+				transparent = true,
+				colors = {
+					theme = {
+						all = {
+							ui = {
+								bg = "#181616",
+								bg_p1 = "#1f1f28",
+								bg_p2 = "#2a2a37",
+								bg_gutter = "none",
+							},
+						},
+					},
+				},
+				overrides = function(colors)
+					-- return { WinSeparator = { fg = colors.palette.sumiInk4, bg = "none" } }
+					return { WinSeparator = { fg = "#ffffff", bg = "none" } }
+				end,
+			})
+			-- vim.cmd("colorscheme kanagawa")
+		end,
+	},
 	-- }}} end colorschemes
 	{
 		"sindrets/diffview.nvim",
 		lazy = false,
 		priority = 1000,
 		opts = {},
+		keys = {
+			{ "<leader>do", "<cmd>DiffviewOpen<CR>", desc = "[D]iffview [O]pen" },
+			{ "<leader>dc", "<cmd>DiffviewClose<CR>", desc = "[D]iffview [C]lose" },
+			{
+				"<leader>dh",
+				"<cmd>DiffviewFileHistory %<CR>",
+				desc = "[D]iffview File [H]istory",
+			},
+			{ "<leader>dH", "<cmd>DiffviewFileHistory<CR>", desc = "[D]iffview Repo History" },
+		},
 	},
 	-- {{{ lazyvim loader: obsidian
 	{
@@ -1121,8 +1182,8 @@ require("lazy").setup({
 		--@type oil.SetupOpts
 		opts = {},
 		-- Optional dependencies
-		-- dependencies = { { "echasnovski/mini.icons", opts = {} } },
-		dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
+		dependencies = { { "echasnovski/mini.icons", opts = {} } },
+		-- dependencies = { "nvim-tree/nvim-web-devicons" }, -- use if prefer nvim-web-devicons
 	},
 
 	-- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
@@ -1137,7 +1198,7 @@ require("lazy").setup({
 	-- require 'kickstart.plugins.debug',
 	-- require 'kickstart.plugins.indent_line',
 	-- require 'kickstart.plugins.lint',
-	-- require 'kickstart.plugins.autopairs',
+	require("kickstart.plugins.autopairs"),
 	-- require 'kickstart.plugins.neo-tree',
 	require("kickstart.plugins.gitsigns"), -- adds gitsigns recommend keymaps
 

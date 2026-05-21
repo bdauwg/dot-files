@@ -1,0 +1,28 @@
+#:schema https://github.com/joshmedeski/sesh/raw/main/sesh.schema.json
+dir_length = 2                    # session names use last 2 path segments, e.g. "projects/sesh"
+cache = true                      # cache session lists for 5s, refreshes in background
+sort_order = ["config", "tmux", "tmuxinator", "zoxide"]
+
+
+[[window]]
+name = "scratch"
+startup_command = "l"
+
+[[wildcard]]
+pattern = "~/git/**"
+windows = ["scratch"]
+name = "vi"
+startup_command = "nvim ."
+preview_command = "git log  --graph --oneline"
+
+[[wildcard]]
+pattern = "~/ws/**"
+windows = ["scratch"]
+name = "vi"
+startup_command = "nvim ."
+preview_command = "git log  --graph --oneline"
+
+[[session]]
+name = "note"
+path = "~/Documents/note"
+startup_command = "note"
