@@ -1,0 +1,9 @@
+[user]
+name = "Brandon Ramos"
+email = "brandon.ramos@toyotatmh.com"
+
+[ui]
+editor = "nvim"
+# diff-formatter = 'git'
+conflict-marker-style = 'git'
+diff-formatter = ":git"

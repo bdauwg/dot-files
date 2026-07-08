@@ -26,6 +26,18 @@ vim.opt.mouse = "a"
 -- Don't show the mode, since it's already in the status line
 vim.opt.showmode = false
 
+-- Help with file changes
+vim.opt.autoread = true
+vim.api.nvim_create_autocmd({
+	"FocusGained",
+	"TermClose",
+	"TermLeave",
+}, {
+	callback = function()
+		vim.cmd("checktime")
+	end,
+})
+
 -- Sync clipboard between OS and Neovim.
 --  Schedule the setting after `UiEnter` because it can increase startup-time.
 --  Remove this option if you want your OS clipboard to remain independent.
@@ -1451,4 +1463,4 @@ vim.keymap.set("n", "-", "<CMD>Oil<CR>", { desc = "Open parent directory" }) -- 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
 
-vim.opt.conceallevel = 2
+vim.opt.conceallevel = 1

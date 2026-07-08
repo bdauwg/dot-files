@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Re-detect monitors and apply the right layout. This is the single entry point
+# for "something about the displays changed" — i3 startup, the dock hotplug,
+# the lid switch, and the $mod+F7 keybind all funnel through here.
+#
+#   display-apply            # match a saved profile, else lay outputs out left-to-right
+#   display-apply --force    # re-apply even if autorandr thinks nothing moved
+#
+# Saved layouts live in ~/.config/autorandr/<name>/ and are matched by the EDIDs
+# of whatever is plugged in — see `autorandr` to list them, `autorandr --save
+# <name>` to record the current arrangement.
+set -uo pipefail
+
+# `horizontal` is autorandr's built-in fallback: every connected output at its
+# preferred mode, side by side. Beats the stock `--default default`, which
+# points at a profile that doesn't exist and just errors out.
+autorandr --change --default horizontal "$@" >/dev/null 2>&1
+
+# autorandr runs postswitch (and therefore display-fixup) itself when it applies
+# a profile, but it silently does nothing when the profile is already loaded —
+# which is exactly the lid-open/lid-close case, where the EDIDs never change.
+# display-fixup is idempotent, so just always run it.
+exec "$(dirname "$(readlink -f "$0")")/display-fixup"

@@ -1,0 +1,16 @@
+# jujutsu working metadata (this repo is jj-colocated on top of git)
+/.jj/
+
+# fish auto-generated state (we only track config.fish)
+fish/.config/fish/fish_variables
+fish/.config/fish/completions/
+fish/.config/fish/functions/
+fish/.config/fish/conf.d/
+
+# nvim plugin state managed by lazy.nvim (lazy-lock.json IS tracked)
+nvim/.config/nvim/lazy/
+nvim/.config/nvim/.luarc.json
+
+# OS / editor cruft
+.DS_Store
+*.swp

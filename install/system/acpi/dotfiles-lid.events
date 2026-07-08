@@ -1,0 +1,7 @@
+# /etc/acpi/events/dotfiles-lid
+#
+# The drm udev rule only fires when a cable is plugged or unplugged. Opening and
+# closing the lid changes no EDID, so nothing else would ever tell the session
+# the panel should go dark. acpid does see the lid button.
+event=button/lid.*
+action=/etc/acpi/dotfiles-lid.sh %e

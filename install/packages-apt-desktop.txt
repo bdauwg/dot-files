@@ -1,0 +1,30 @@
+# Desktop-only apt packages — i3 window-manager environment.
+# Skipped on the WSL profile (no X server there).
+# Derived from programs referenced in i3/.config/i3/config.
+
+# --- i3 window manager + status bar ---
+i3
+i3status
+i3lock          # screen locker (used with xss-lock)
+xss-lock        # lock on sleep/idle
+dex             # XDG autostart (exec dex --autostart)
+
+# --- launcher / wallpaper / screenshots ---
+rofi            # $mod+d launcher, emoji/window/file modes
+suckless-tools  # provides dmenu
+feh             # wallpaper (feh --bg-fill ~/Pictures/uw-background.jpg)
+flameshot       # screenshots ($mod+Shift+s, PrintScreen)
+
+# --- multi-monitor / docking ---
+autorandr       # save + auto-apply per-dock monitor layouts (see display/)
+arandr          # small GUI for building a layout before `autorandr --save`
+acpid           # delivers lid open/close events (see install/laptop.sh)
+
+# --- tray / hardware controls ---
+network-manager-gnome   # nm-applet
+blueman                 # bluetooth tray
+brightnessctl           # XF86MonBrightness keys
+pulseaudio-utils        # pactl (volume keys); harmless if using pipewire
+
+# NOTE: kitty and spicetify are installed separately (see tools.sh),
+# and the wallpaper ~/Pictures/uw-background.jpg is NOT tracked here.

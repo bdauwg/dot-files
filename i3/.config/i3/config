@@ -21,6 +21,13 @@ font pango:GoMono Nerd Font Mono 6
 # text rendering and scalability on retina/hidpi displays (thanks to pango).
 #font pango:DejaVu Sans Mono 8
 
+# Monitors first, wallpaper second — feh needs to know how big the screen is.
+# display-apply matches a saved autorandr profile against whatever is plugged
+# in, drops the internal panel if the lid is shut, and re-points `primary`.
+exec_always --no-startup-id ~/.local/bin/display-apply
+
+exec_always --no-startup-id feh --bg-fill ~/Pictures/uw-background.jpg
+
 default_border pixel 2
 default_floating_border pixel 1
 for_window [class="^.*"] border pixel 2
@@ -187,6 +194,20 @@ bindsym $mod+Shift+9 move container to workspace number $ws9
 bindsym $mod+Shift+0 move container to workspace number $ws10
 # }}}
 
+# Pin workspaces to a screen rather than to an output name — `primary` and
+# `nonprimary` follow whatever display-apply picked, so these survive a change
+# of dock. Uncomment if you want workspaces to land in fixed places.
+# workspace $ws1 output primary
+# workspace $ws2 output primary
+# workspace $ws3 output primary
+# workspace $ws4 output primary
+# workspace $ws5 output primary
+# workspace $ws6 output nonprimary primary
+# workspace $ws7 output nonprimary primary
+# workspace $ws8 output nonprimary primary
+# workspace $ws9 output nonprimary primary
+# workspace $ws10 output nonprimary primary
+
 # reload the configuration file
 bindsym $mod+Shift+c reload
 # restart i3 inplace (preserves your layout/session, can be used to upgrade i3)
@@ -216,6 +237,7 @@ mode "resize" {
         # back to normal: Enter or Escape or $mod+r
         bindsym Return mode "default"
         bindsym Escape mode "default"
+        bindsym q mode "default"
         bindsym $mod+r mode "default"
 }
 
@@ -240,11 +262,17 @@ bindsym $mod+F3 exec --no-startup-id \
 
 bindsym $mod+Shift+s exec --no-startup-id "flameshot gui"
 bindsym Print exec --no-startup-id "flameshot gui"
-bindsym $mod+F7 exec --no-startup-id \
-    bash -c "autorandr --load tmh"
+# Re-detect monitors (after a redock, or when the hotplug event was missed).
+bindsym $mod+F7 exec --no-startup-id ~/.local/bin/display-apply --force
+# Pick a saved layout by hand when autodetect guesses wrong.
+bindsym $mod+Shift+F7 exec --no-startup-id \
+    bash -c 'autorandr | sed "s/ (detected)//;s/ (current)//" | rofi -dmenu -p layout | xargs -r autorandr --load'
 
 
 # Send the focused window to the scratchpad
 bindsym $mod+Shift+minus move scratchpad
 # Show/hide the most recently used scratchpad window
 bindsym $mod+minus scratchpad show
+
+for_window [title="image_view"] floating enable, resize set 400 800
+for_window [title="Hawk"] floating enable, resize set 400 800

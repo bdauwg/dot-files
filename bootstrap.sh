@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Bootstrap these dotfiles on a fresh Ubuntu machine (desktop or WSL).
+#
+#   ./bootstrap.sh                 # auto-detect profile, do everything
+#   ./bootstrap.sh --profile wsl   # force WSL profile (no GUI packages)
+#   ./bootstrap.sh --no-tools      # skip non-apt tool installs
+#   ./bootstrap.sh --no-chsh       # don't change the login shell to fish
+#   ./bootstrap.sh --link-only     # only (re)create the stow symlinks
+#
+# On a laptop the desktop profile also installs lid/dock display handling
+# (install/laptop.sh) — see the `display` package.
+#
+# Safe to re-run: apt installs skip present packages, tool installers skip
+# present binaries, and `stow --restow` just refreshes symlinks.
+set -euo pipefail
+cd "$(dirname "$0")"
+source install/lib.sh
+
+# ---- args ------------------------------------------------------------------
+PROFILE="$(detect_profile)"
+DO_APT=1; DO_TOOLS=1; DO_LINK=1; DO_CHSH=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --profile) PROFILE="$2"; shift 2 ;;
+    --profile=*) PROFILE="${1#*=}"; shift ;;
+    --no-apt)   DO_APT=0; shift ;;
+    --no-tools) DO_TOOLS=0; shift ;;
+    --no-chsh)  DO_CHSH=0; shift ;;
+    --link-only) DO_APT=0; DO_TOOLS=0; DO_CHSH=0; shift ;;
+    -h|--help) awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
+case "$PROFILE" in desktop|wsl) ;; *) die "profile must be 'desktop' or 'wsl'";; esac
+
+info "profile: $PROFILE   ($(. /etc/os-release; echo "$PRETTY_NAME"))"
+
+# stow packages that apply everywhere, and the desktop-only extras.
+COMMON_PKGS=(fish nvim tmux starship sesh jrnl git jj)
+DESKTOP_PKGS=(i3 i3status display)
+
+# ---- 1. apt packages -------------------------------------------------------
+if [ "$DO_APT" = 1 ]; then
+  info "installing common apt packages"
+  # shellcheck disable=SC2046
+  apt_install_missing $(read_pkglist install/packages-apt.txt)
+  if [ "$PROFILE" = desktop ]; then
+    info "installing desktop apt packages"
+    # shellcheck disable=SC2046
+    apt_install_missing $(read_pkglist install/packages-apt-desktop.txt)
+  fi
+fi
+
+# ---- 2. non-apt tools ------------------------------------------------------
+if [ "$DO_TOOLS" = 1 ]; then
+  if [ "$PROFILE" = desktop ]; then
+    ./install/tools.sh --desktop
+  else
+    ./install/tools.sh
+  fi
+fi
+
+# ---- 3. link configs with stow --------------------------------------------
+if [ "$DO_LINK" = 1 ]; then
+  have stow || apt_install_missing stow
+  local_pkgs=("${COMMON_PKGS[@]}")
+  [ "$PROFILE" = desktop ] && local_pkgs+=("${DESKTOP_PKGS[@]}")
+  info "linking: ${local_pkgs[*]}"
+  # --restow cleans stale links first; --no-folding keeps real dirs where
+  # apps write their own files (e.g. nvim plugin state) instead of a symlink.
+  for pkg in "${local_pkgs[@]}"; do
+    if stow --restow --target="$HOME" --no-folding "$pkg" 2>/dev/null; then
+      ok "stow $pkg"
+    else
+      warn "stow $pkg had conflicts — resolve, then: stow --restow --adopt $pkg"
+    fi
+  done
+fi
+
+# ---- 3b. laptop-only system config -----------------------------------------
+# Lid policy, the autorandr hotplug fallback and the acpid lid hook live outside
+# $HOME and must be root-owned, so stow can't place them. Runs after linking
+# because the acpid hook calls ~/.local/bin/display-apply.
+if [ "$DO_LINK" = 1 ] && [ "$PROFILE" = desktop ] && is_laptop; then
+  ./install/laptop.sh
+fi
+
+# ---- 4. default shell ------------------------------------------------------
+if [ "$DO_CHSH" = 1 ]; then
+  fish_path="$(command -v fish || true)"
+  if [ -z "$fish_path" ]; then
+    warn "fish not found; skipping chsh"
+  elif [ "${SHELL:-}" = "$fish_path" ]; then
+    ok "login shell already fish"
+  else
+    grep -qx "$fish_path" /etc/shells || echo "$fish_path" | sudo tee -a /etc/shells >/dev/null
+    if chsh -s "$fish_path"; then
+      ok "login shell -> fish (re-login to take effect)"
+    else
+      warn "chsh failed; set manually: chsh -s $fish_path"
+    fi
+  fi
+fi
+
+echo
+ok "bootstrap complete."
+cat <<EOF
+
+Next steps:
+  - Restart your shell (or re-login) to pick up fish.
+  - Open nvim once; lazy.nvim will sync plugins on first launch.
+  - jrnl: journals point at ~/Documents/note/*.md — create that dir or edit
+    ~/.config/jrnl/jrnl.yaml (paths there are absolute; see README caveats).
+EOF
+[ "$PROFILE" = desktop ] && echo "  - i3: set your wallpaper at ~/Pictures/uw-background.jpg (not tracked)."
+exit 0

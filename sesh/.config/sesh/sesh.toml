@@ -22,6 +22,14 @@ name = "vi"
 startup_command = "nvim ."
 preview_command = "git log  --graph --oneline"
 
+[[wildcard]]
+pattern = "~/ai/*"
+windows = ["scratch"]
+name = "vi"
+startup_command = "nvim ."
+preview_command = "git log  --graph --oneline"
+
+
 [[session]]
 name = "note"
 path = "~/Documents/note"

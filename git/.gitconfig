@@ -1,0 +1,11 @@
+[user]
+	email = brandon.ramos@toyotatmh.com
+	name = brandon ramos
+[http]
+	version = HTTP/1.1
+[init]
+	defaultBranch = main
+[core]
+	editor = vim
+	# ~ expands portably; tracked in this repo as git/.config/git/ignore
+	excludesfile = ~/.config/git/ignore

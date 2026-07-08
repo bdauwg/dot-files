@@ -1,0 +1,28 @@
+# Common apt packages — installed on every profile (desktop + WSL).
+# One package per line. '#' comments and blank lines ignored.
+
+# --- build / bootstrap essentials ---
+build-essential
+ca-certificates
+curl
+wget
+git
+unzip
+stow            # symlink manager used to deploy these dotfiles
+
+# --- shell + terminal multiplexer ---
+fish
+tmux
+
+# --- modern CLI tools (available in Ubuntu 24.04 universe) ---
+ripgrep         # rg
+fd-find         # provides `fdfind` (see tools.sh for the `fd` shim)
+bat             # provides `batcat`
+fzf
+zoxide
+jq
+
+# --- python tooling (jrnl is installed via pipx in tools.sh) ---
+python3
+python3-pip
+pipx

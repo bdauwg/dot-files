@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Enforce the display rules that an autorandr profile can't express by itself,
+# then let i3 catch up. Idempotent — safe to run from any hook, any number of
+# times.
+#
+#   1. lid closed + an external attached -> internal panel off
+#   2. never leave zero outputs enabled  -> panel back on if everything else went
+#   3. `primary` always points at a connected output (i3 uses `tray_output primary`)
+#   4. redraw the wallpaper, and restart i3 only when the output set really moved
+#
+#   display-fixup            # do it
+#   display-fixup --dry-run  # print what it would do, touch nothing
+#
+# Why this exists: autorandr already knows how to treat a closed lid as an
+# unplugged display, but only for outputs *named* eDP*/LVDS* — see
+# is_closed_lid() in /usr/bin/autorandr. Under the NVIDIA driver this ThinkPad's
+# built-in panel is called DP-4, so that check never fires and docking with the
+# lid shut leaves the panel lit behind a closed screen, stealing a workspace.
+set -uo pipefail
+
+WALLPAPER="${WALLPAPER:-$HOME/Pictures/uw-background.jpg}"
+changed=0
+DRY=0
+case "${1:-}" in -n|--dry-run) DRY=1 ;; esac
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Every state-changing command goes through run(), so --dry-run is honest.
+run() {
+  if [ "$DRY" = 1 ]; then printf 'would run: %s\n' "$*"; return 0; fi
+  "$@"
+}
+
+connected_outputs() { xrandr --query | awk '/ connected/ {print $1}'; }
+active_outputs()    { xrandr --listmonitors | awk 'NR>1 {print $NF}'; }
+
+lid_closed() {
+  local f
+  for f in /proc/acpi/button/lid/*/state; do
+    [ -r "$f" ] || continue
+    grep -qi closed "$f" && return 0
+  done
+  return 1
+}
+
+# Which xrandr output is the built-in panel? Three strategies, cheapest first.
+internal_output() {
+  # 1. explicit override, for machines the heuristics get wrong
+  if [ -n "${DISPLAY_INTERNAL_OUTPUT:-}" ]; then
+    printf '%s\n' "$DISPLAY_INTERNAL_OUTPUT"; return
+  fi
+  if [ -r "$HOME/.config/display/internal-output" ]; then
+    tr -d '[:space:]' < "$HOME/.config/display/internal-output"; echo; return
+  fi
+  # 2. the normal case: modesetting/i915/amdgpu name it eDP-1 or LVDS-1
+  local out
+  out="$(connected_outputs | grep -m1 -E '^(eDP|LVDS)')" && [ -n "$out" ] && {
+    printf '%s\n' "$out"; return
+  }
+  # 3. NVIDIA renames it (DP-4 here), so match the panel by EDID instead: the
+  #    kernel still exposes the real eDP connector under /sys/class/drm.
+  #    NB: sysfs reports size 0 for these files, so never test them with -s.
+  local f panel
+  for f in /sys/class/drm/*eDP*/edid /sys/class/drm/*LVDS*/edid; do
+    [ -r "$f" ] || continue
+    panel="$(od -An -tx1 "$f" 2>/dev/null | tr -d ' \n')"
+    [ -n "$panel" ] && break
+  done
+  [ -n "${panel:-}" ] || return 0
+  xrandr --props | awk -v want="$panel" '
+    function flush() {
+      if (grab && substr(want, 1, 64) == substr(edid, 1, 64)) { print owner; found = 1; exit }
+      grab = 0
+    }
+    /^[^ \t]/          { flush(); out = $1 }
+    /^[ \t]+EDID:/     { grab = 1; owner = out; edid = ""; next }
+    grab && $1 ~ /^[0-9a-f]+$/ && length($1) >= 16 { edid = edid $1; next }
+    grab               { flush() }
+    END                 { if (!found) flush() }
+  '
+}
+
+INTERNAL="$(internal_output)"
+
+# --- 1 & 2. the lid rule ----------------------------------------------------
+if [ -n "$INTERNAL" ]; then
+  externals_on="$(active_outputs | grep -vFx "$INTERNAL" | wc -l)"
+  internal_on="$(active_outputs | grep -cFx "$INTERNAL")"
+
+  if lid_closed && [ "$externals_on" -gt 0 ] && [ "$internal_on" -gt 0 ]; then
+    # A profile named "<something>-closed" gets to lay the externals out
+    # properly (at 0x0, no hole where the panel used to be). Without one we
+    # just switch the panel off and leave the rest where the profile put it.
+    profile="$(cat "$HOME/.config/autorandr/current_profile" 2>/dev/null || true)"
+    if [ -z "${DISPLAY_FIXUP_REENTRANT:-}" ] && [ -n "$profile" ] \
+       && [ -d "$HOME/.config/autorandr/${profile}-closed" ]; then
+      run env DISPLAY_FIXUP_REENTRANT=1 autorandr --load "${profile}-closed"
+    else
+      run xrandr --output "$INTERNAL" --off
+    fi
+    changed=1
+  elif ! lid_closed && [ "$internal_on" -eq 0 ] && [ -z "${DISPLAY_FIXUP_REENTRANT:-}" ]; then
+    # Lid came back open and the panel is dark: re-apply the matching profile.
+    run env DISPLAY_FIXUP_REENTRANT=1 autorandr --change --default horizontal
+    changed=1
+  fi
+
+  # Safety valve: an undock while shut must not black-screen the machine.
+  if [ -z "$(active_outputs)" ]; then
+    run xrandr --output "$INTERNAL" --auto
+    changed=1
+  fi
+fi
+
+# --- 3. primary must be a live output --------------------------------------
+current_primary="$(xrandr --query | awk '/ connected primary/ {print $1}')"
+if [ -z "$current_primary" ] || ! active_outputs | grep -qFx "$current_primary"; then
+  # Prefer an external (that's where the tray belongs when docked), else the panel.
+  want="$(active_outputs | grep -vFx "${INTERNAL:-__none__}" | head -1)"
+  [ -n "$want" ] || want="$(active_outputs | head -1)"
+  if [ -n "$want" ]; then
+    run xrandr --output "$want" --primary
+    changed=1
+  fi
+fi
+
+# --- 4. let the desktop catch up -------------------------------------------
+[ -f "$WALLPAPER" ] && have feh && run feh --bg-fill "$WALLPAPER"
+
+if [ "$changed" = 1 ] && have i3-msg; then
+  # i3 follows RandR on its own for workspaces, but the systray only re-homes
+  # itself (tray_output primary) across a restart. Layout is preserved.
+  run i3-msg restart
+fi
+exit 0

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Global autorandr hook: runs after *any* profile is applied, including the ones
+# triggered by the udev drm-hotplug rule. All the real work is in display-fixup.
+exec "$HOME/.local/bin/display-fixup"
