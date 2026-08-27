@@ -1,0 +1,10 @@
+# Go packages installed with `go install`, into ~/.local/bin (GOBIN).
+#
+# Format:  module@version[:binary]
+# Module paths are stable URLs; the GitHub release tarballs are not — sesh's
+# asset was renamed amd64 -> x86_64 and silently 404'd every install.
+#
+# sesh's go.mod asks for a newer Go than Ubuntu ships. GOTOOLCHAIN=auto (the
+# default since 1.21) downloads the right one on first build.
+
+github.com/joshmedeski/sesh/v2@latest:sesh   # tmux session manager

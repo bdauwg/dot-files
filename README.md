@@ -16,9 +16,15 @@ cd ~/git/dotfiles
 tools) or **WSL** (skips all GUI packages), then:
 
 1. installs apt packages (`install/packages-apt*.txt`),
-2. installs non-apt tools with prebuilt binaries (`install/tools.sh`),
-3. symlinks configs into `$HOME` with stow,
+2. installs non-apt tools — prebuilt binaries, then `cargo` and `go` packages
+   (`install/tools.sh`, `install/packages-cargo.txt`, `install/packages-go.txt`),
+3. symlinks configs into `$HOME` with stow, moving anything in the way into
+   `~/.dotfiles-backup/<timestamp>/`,
 4. sets `fish` as the login shell.
+
+A tool that fails to install no longer takes the rest of the run down with it —
+each installer is isolated, failures are listed at the end, and the stow step
+still happens.
 
 It is **idempotent** — safe to run again after pulling updates.
 
@@ -143,6 +149,30 @@ git diff        # confirm nothing unexpected moved
 New profiles saved later land as real directories inside the stowed one; copy
 them into `display/.config/autorandr/` to track them.
 
+## Toolchains and package lists
+
+Rust and Go are installed **on demand**: `tools.sh` first works out which
+packages are actually missing, and only then fetches a toolchain. A machine
+where everything is already present installs no compiler at all.
+
+| List | Installed with | Format |
+|------|----------------|--------|
+| `install/packages-cargo.txt` | `cargo install --locked` | `crate[:binary]` |
+| `install/packages-go.txt` | `go install` (`GOBIN=~/.local/bin`) | `module@version[:binary]` |
+
+The optional `:binary` is the "is it already here?" check — give it when the
+command name differs from the package name (`jj-cli:jj`, `tmux-sessionizer:tms`).
+Anything already on PATH is skipped, so nothing gets rebuilt from source just
+because you also installed it another way.
+
+Toolchain sources: `rustup` (minimal profile, `~/.cargo`) and the current Go
+tarball from `go.dev` into `/usr/local/go`. Add anything you want to either list
+and re-run `./install/tools.sh`.
+
+Prefer packages here over hand-rolled installers — a `go install` module path is
+a stable URL, whereas GitHub release asset names are not. sesh moved from
+`sesh_Linux_amd64.tar.gz` to `sesh_Linux_x86_64.tar.gz` and 404'd every install.
+
 ## Day-to-day
 
 Because configs are **symlinks back into this repo**, editing e.g.
@@ -164,8 +194,14 @@ stow --target="$HOME" --no-folding newtool
 
 ## Migrating a machine that already has these configs
 
-On a box where the real files already exist (not symlinks yet), let stow pull
-them into the repo instead of erroring on conflict:
+`bootstrap.sh` handles this itself now: stow aborts a whole package the moment
+one real file is in its way, so it reads the conflicting paths out of stow's
+error, moves them to `~/.dotfiles-backup/<timestamp>/`, and retries. The repo
+wins and nothing is deleted — check the backup dir afterwards for anything you
+want to merge back.
+
+If you'd rather keep the machine's version and pull it *into* the repo, do that
+before running bootstrap:
 
 ```sh
 stow --adopt --target="$HOME" --no-folding fish nvim tmux starship sesh jrnl git jj
@@ -185,7 +221,12 @@ git diff        # review what --adopt changed, revert anything unwanted
   never match).
 - **conda** block in `config.fish` is guarded; it's a no-op until you install
   miniconda. Toolchains (rust/go/node/conda) are intentionally not installed by
-  bootstrap — add them per-machine as needed.
+  bootstrap — **except** Rust and Go, which are installed on demand when a
+  package list needs them; see
+  [Toolchains and package lists](#toolchains-and-package-lists).
+- **every installer is `have`-gated**, so bootstrap will not replace a tool you
+  installed another way. On a box where these were set up by hand, the tool step
+  is a no-op and versions/paths stay whatever you already had.
 - **kitty** and **spicetify** (desktop) install to `~/.local/` via their own
   installers, invoked by `install/tools.sh --desktop`.
 
@@ -196,8 +237,11 @@ git diff        # review what --adopt changed, revert anything unwanted
 - **apt (desktop):** i3, i3status, i3lock, xss-lock, dex, rofi, dmenu, feh,
   flameshot, autorandr, arandr, acpid, network-manager-gnome, blueman,
   brightnessctl, pulseaudio-utils.
-- **binaries (all):** neovim (latest stable), starship, jj, sesh, lazygit, lsd,
-  jrnl, plus `fd`/`bat` shims for Ubuntu's `fdfind`/`batcat`.
+- **binaries (all):** neovim (latest stable), starship, jj, lazygit, lsd, jrnl,
+  plus `fd`/`bat` shims for Ubuntu's `fdfind`/`batcat`.
+- **cargo (all):** whatever is in `install/packages-cargo.txt` — jj-cli, lsd,
+  tmux-sessionizer, cargo-update.
+- **go (all):** whatever is in `install/packages-go.txt` — sesh.
 - **binaries (desktop):** kitty, spicetify, and Nerd Fonts (CodeNewRoman,
   Inconsolata, Go-Mono, Tinos) via `install/fonts.sh`.
 

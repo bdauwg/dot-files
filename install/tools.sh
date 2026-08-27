@@ -68,21 +68,100 @@ install_jj() {
   rm -rf "$tmp"; ok "jj -> $LOCAL_BIN/jj"
 }
 
-install_sesh() {
-  have sesh && { ok "sesh present"; return; }
-  info "installing sesh"
-  local tag ver; tag="$(github_tag joshmedeski/sesh)"; ver="${tag#v}"
-  local arch; case "$ARCH" in
-    x86_64)  arch="amd64" ;;
-    aarch64) arch="arm64" ;;
-    *) warn "no sesh binary for $ARCH"; return ;;
+# ---- toolchains ------------------------------------------------------------
+# Installed on demand: only when a package list actually needs them, so a box
+# that just wants the prebuilt binaries never pays for a compiler.
+
+install_rust() {
+  have cargo && { ok "cargo present ($(cargo --version | awk '{print $2}'))"; return; }
+  info "installing rust (rustup, minimal profile)"
+  curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal >/dev/null
+  export PATH="$HOME/.cargo/bin:$PATH"
+  ok "rust -> $HOME/.cargo/bin"
+}
+
+install_golang() {
+  have go && { ok "go present ($(go version | awk '{print $3}'))"; return; }
+  info "installing go"
+  local goarch; case "$ARCH" in
+    x86_64)  goarch="amd64" ;;
+    aarch64) goarch="arm64" ;;
+    *) warn "no go binary for $ARCH"; return 1 ;;
   esac
+  # go.dev/VERSION is the canonical "what is current" endpoint; first line only.
+  local ver; ver="$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1)"
+  [ -n "$ver" ] || { warn "could not determine the current go version"; return 1; }
   local tmp; tmp="$(mktemp -d)"
-  curl -fsSL "https://github.com/joshmedeski/sesh/releases/download/${tag}/sesh_Linux_${arch}.tar.gz" \
-    -o "$tmp/sesh.tgz"
-  tar -xzf "$tmp/sesh.tgz" -C "$tmp"
-  install -m755 "$tmp/sesh" "$LOCAL_BIN/sesh"
-  rm -rf "$tmp"; ok "sesh -> $LOCAL_BIN/sesh"
+  curl -fsSL "https://go.dev/dl/${ver}.linux-${goarch}.tar.gz" -o "$tmp/go.tgz"
+  sudo rm -rf /usr/local/go
+  sudo tar -C /usr/local -xzf "$tmp/go.tgz"
+  rm -rf "$tmp"
+  export PATH="/usr/local/go/bin:$PATH"
+  ok "go ($ver) -> /usr/local/go"
+}
+
+# ---- package lists ---------------------------------------------------------
+# Both lists use  spec[:binary]  — the binary name is the "is it already here?"
+# check, so nothing gets rebuilt just because the crate and command differ.
+# split_spec sets $SPEC and $BIN.
+split_spec() {
+  SPEC="${1%%:*}"
+  BIN="${1#*:}"
+  # No colon in the spec means the parameter expansion returned it unchanged.
+  # NB: explicit return — a bare `[ ... ] && BIN=...` leaves the function's exit
+  # status at the failed test, which set -e turns into an abort at the call site.
+  if [ "$BIN" = "$1" ]; then BIN="$SPEC"; fi
+  return 0
+}
+
+install_cargo_packages() {
+  local list="$DOTFILES_DIR/install/packages-cargo.txt"
+  [ -f "$list" ] || return 0
+  # Work out what's actually missing before dragging in a Rust toolchain.
+  local entry todo=()
+  while read -r entry; do
+    split_spec "$entry"
+    have "$BIN" && { ok "cargo: $SPEC present"; continue; }
+    todo+=("$entry")
+  done < <(read_pkglist "$list")
+  [ ${#todo[@]} -eq 0 ] && return 0
+
+  install_rust
+  have cargo || { warn "cargo unavailable; skipping: ${todo[*]}"; return 1; }
+  local rc=0
+  for entry in "${todo[@]}"; do
+    split_spec "$entry"
+    info "cargo install $SPEC (builds from source, this can take several minutes)"
+    if cargo install --locked "$SPEC"; then ok "$BIN"; else warn "cargo install $SPEC failed"; rc=1; fi
+  done
+  return $rc
+}
+
+install_go_packages() {
+  local list="$DOTFILES_DIR/install/packages-go.txt"
+  [ -f "$list" ] || return 0
+  local entry todo=()
+  while read -r entry; do
+    split_spec "$entry"
+    have "$BIN" && { ok "go: $BIN present"; continue; }
+    todo+=("$entry")
+  done < <(read_pkglist "$list")
+  [ ${#todo[@]} -eq 0 ] && return 0
+
+  install_golang
+  have go || { warn "go unavailable; skipping: ${todo[*]}"; return 1; }
+  local rc=0
+  for entry in "${todo[@]}"; do
+    split_spec "$entry"
+    info "go install $SPEC"
+    # GOBIN keeps these with every other tool here instead of ~/go/bin.
+    if GOBIN="$LOCAL_BIN" GOTOOLCHAIN="${GOTOOLCHAIN:-auto}" go install "$SPEC"; then
+      ok "$BIN -> $LOCAL_BIN/$BIN"
+    else
+      warn "go install $SPEC failed"; rc=1
+    fi
+  done
+  return $rc
 }
 
 install_lazygit() {
@@ -158,26 +237,48 @@ install_spicetify() {
   ok "spicetify"
 }
 
+install_fonts() { "$DOTFILES_DIR/install/fonts.sh"; }   # Nerd Fonts for the GUI terminal
+
 # ---------------------------------------------------------------------------
+# Run one installer in a subshell that keeps its own errexit, so a dead download
+# aborts *that* tool and nothing else. Without this a single 404 (sesh's renamed
+# release asset, for one) killed tools.sh, which killed bootstrap.sh — before it
+# ever got to the stow step, leaving a machine with neither tools nor configs.
+FAILED=()
+run_step() {
+  local fn="$1" rc=0
+  set +e; ( set -e; "$fn" ); rc=$?; set -e
+  if [ $rc -ne 0 ]; then
+    warn "${fn#install_} failed (exit $rc) — continuing"
+    FAILED+=("${fn#install_}")
+  fi
+  return 0
+}
+
 main() {
   local desktop=0
   [ "${1:-}" = "--desktop" ] && desktop=1
 
-  install_neovim
-  install_starship
-  install_jj
-  install_sesh
-  install_lazygit
-  install_lsd
-  install_jrnl
-  install_shims
+  run_step install_neovim
+  run_step install_starship
+  run_step install_jj
+  run_step install_lazygit
+  run_step install_lsd
+  run_step install_jrnl
+  run_step install_cargo_packages
+  run_step install_go_packages
+  run_step install_shims
 
   if [ "$desktop" = 1 ]; then
-    install_kitty
-    install_spicetify
-    "$(dirname "${BASH_SOURCE[0]}")/fonts.sh"   # Nerd Fonts for the GUI terminal
+    run_step install_kitty
+    run_step install_spicetify
+    run_step install_fonts
   fi
 
+  if [ ${#FAILED[@]} -gt 0 ]; then
+    warn "finished with failures: ${FAILED[*]}"
+    warn "re-run ./install/tools.sh once the cause is fixed; everything is idempotent."
+  fi
   ok "tools done. Ensure $LOCAL_BIN is on PATH (the fish config adds it)."
 }
 main "$@"

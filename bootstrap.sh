@@ -66,15 +66,46 @@ if [ "$DO_LINK" = 1 ]; then
   local_pkgs=("${COMMON_PKGS[@]}")
   [ "$PROFILE" = desktop ] && local_pkgs+=("${DESKTOP_PKGS[@]}")
   info "linking: ${local_pkgs[*]}"
-  # --restow cleans stale links first; --no-folding keeps real dirs where
-  # apps write their own files (e.g. nvim plugin state) instead of a symlink.
-  for pkg in "${local_pkgs[@]}"; do
-    if stow --restow --target="$HOME" --no-folding "$pkg" 2>/dev/null; then
-      ok "stow $pkg"
-    else
-      warn "stow $pkg had conflicts — resolve, then: stow --restow --adopt $pkg"
+  BACKUP_DIR="$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
+
+  # stow aborts the *entire* package the moment one real file is in its way, and
+  # on any machine that has already run fish/nvim/tmux once, that's guaranteed —
+  # which is how you end up with a fresh box where nothing got linked. So: read
+  # the paths out of stow's complaint, move them into a timestamped backup, and
+  # retry. The repo wins; nothing is deleted.
+  stow_pkg() {
+    local pkg="$1" out conflicts f n
+    # --restow clears stale links first; --no-folding keeps real dirs where apps
+    # write their own state (nvim plugins, autorandr profiles) instead of a symlink.
+    if out="$(stow --restow --target="$HOME" --no-folding "$pkg" 2>&1)"; then
+      ok "stow $pkg"; return 0
     fi
+    conflicts="$(printf '%s\n' "$out" | sed -n \
+      -e 's/^ *\* existing target is neither a link nor a directory: //p' \
+      -e 's/^ *\* existing target is not owned by stow: //p' | sort -u)"
+    if [ -z "$conflicts" ]; then
+      err "stow $pkg failed:"; printf '%s\n' "$out" >&2; return 1
+    fi
+    n=0
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      mkdir -p "$BACKUP_DIR/$(dirname "$f")"
+      mv "$HOME/$f" "$BACKUP_DIR/$f"
+      n=$((n + 1))
+    done <<<"$conflicts"
+    if out="$(stow --restow --target="$HOME" --no-folding "$pkg" 2>&1)"; then
+      ok "stow $pkg ($n pre-existing file(s) moved to $BACKUP_DIR)"
+    else
+      err "stow $pkg still failing after backup:"; printf '%s\n' "$out" >&2; return 1
+    fi
+  }
+
+  link_failed=0
+  for pkg in "${local_pkgs[@]}"; do
+    stow_pkg "$pkg" || link_failed=1
   done
+  [ -d "${BACKUP_DIR:-}" ] && warn "pre-existing configs backed up in $BACKUP_DIR"
+  [ "$link_failed" = 1 ] && warn "some packages did not link — see the errors above"
 fi
 
 # ---- 3b. laptop-only system config -----------------------------------------

@@ -1,0 +1,17 @@
+# Rust packages installed with `cargo install --locked`.
+#
+# Format:  crate[:binary]
+# The optional binary name is what gets checked to decide "already installed" —
+# give it whenever it differs from the crate name. Anything already on PATH is
+# skipped, so a crate that also has a prebuilt installer in tools.sh (jj, lsd)
+# won't be rebuilt from source; delete the prebuilt installer if you'd rather
+# cargo own it.
+#
+# These build from source. Expect a fresh machine to sit here for a while.
+
+jj-cli:jj                       # jujutsu VCS (tools.sh installs a prebuilt first)
+lsd                             # ls replacement; aliased to l/la/ll in config.fish
+tmux-sessionizer:tms            # tmux session picker
+cargo-update:cargo-install-update  # `cargo install-update -a` to refresh these
+
+# alacritty                     # installed on the main box, but i3 launches kitty

@@ -26,6 +26,10 @@ fish_add_path $HOME/go/bin
 # rust
 fish_add_path $HOME/.cargo/bin
 
+# go toolchain (install/tools.sh puts it here); `go install` output goes to
+# ~/.local/bin via GOBIN, but ~/go/bin stays on PATH for anything installed by hand
+fish_add_path /usr/local/go/bin
+
 # NVM setup
 # set -Ux NVM_DIR "$HOME/.nvm"
 # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
