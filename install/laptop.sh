@@ -13,6 +13,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 is_laptop || { ok "no lid switch here; skipping laptop display config"; exit 0; }
 
+# Everything below writes to /etc. There is no unprivileged equivalent, so this
+# is the one part of the bootstrap that simply doesn't happen without root.
+can_sudo || { warn "no sudo: skipping lid/dock system config (it all lives in /etc)"; exit 0; }
+
 have autorandr || die "autorandr missing — run bootstrap.sh (or apt install autorandr)"
 have acpid     || warn "acpid missing — lid open/close won't retrigger the layout"
 

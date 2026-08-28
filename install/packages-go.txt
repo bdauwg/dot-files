@@ -8,3 +8,10 @@
 # default since 1.21) downloads the right one on first build.
 
 github.com/joshmedeski/sesh/v2@latest:sesh   # tmux session manager
+
+# --- apt fallbacks ---------------------------------------------------------
+# As in packages-cargo.txt: only ever built on a box where apt didn't supply
+# them. gojq stands in for jq — install_shims symlinks it as `jq` if jq is
+# missing entirely.
+github.com/junegunn/fzf@latest:fzf           # fuzzy finder
+github.com/itchyny/gojq/cmd/gojq@latest:gojq # jq, in Go (near-drop-in)

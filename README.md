@@ -31,8 +31,9 @@ It is **idempotent** — safe to run again after pulling updates.
 ### Options
 
 ```sh
-./bootstrap.sh --profile wsl     # force WSL profile (no GUI)
-./bootstrap.sh --profile desktop # force desktop profile
+./bootstrap.sh --profile wsl      # force WSL profile (no GUI)
+./bootstrap.sh --profile desktop  # force desktop profile
+./bootstrap.sh --profile headless # server / work box: no GUI packages
 ./bootstrap.sh --link-only       # just refresh symlinks
 ./bootstrap.sh --no-tools        # skip binary installs
 ./bootstrap.sh --no-chsh         # keep current login shell
@@ -210,6 +211,49 @@ git diff        # review what --adopt changed, revert anything unwanted
 
 `--adopt` moves the existing file into the repo and replaces it with a symlink.
 
+## Machines without sudo
+
+Everything except apt and `install/laptop.sh` installs under `$HOME`, so a
+locked-down work box gets the same shell, editor and CLI tools:
+
+```sh
+DOTFILES_NO_SUDO=1 ./bootstrap.sh --profile headless
+```
+
+`DOTFILES_NO_SUDO=1` forces the unprivileged path. You don't strictly need it —
+a failed `sudo apt-get install` is treated as a skip, not an error, so bootstrap
+reaches the stow step either way — but setting it avoids a pointless password
+prompt.
+
+What apt would have provided is reported at the end of step 1. Most of it is
+covered automatically: `packages-cargo.txt` and `packages-go.txt` carry
+fallbacks for ripgrep, fd, bat, zoxide, fzf and jq, and those entries are
+`have`-gated, so on a normal machine apt wins and nothing is rebuilt from
+source.
+
+Two real gaps, both needing a prebuilt binary or a build from source:
+
+| Missing | Why |
+|---------|-----|
+| `fish` | no cargo/go install path; the login-shell step is skipped too, since `chsh` needs the shell listed in `/etc/shells` |
+| `tmux` | C, not Rust or Go — build it, drop in a static binary, or move to zellij |
+
+Exec fish from your login shell's rc instead of `chsh`:
+
+```sh
+# ~/.bashrc — only for an interactive top-level shell
+case $- in *i*) [ -z "$FISH" ] && exec "$HOME/.local/bin/fish" ;; esac
+```
+
+`install/laptop.sh` (lid policy, acpid hook) writes only to `/etc` and simply
+skips itself when there's no sudo — it has no unprivileged equivalent, and a
+headless box has nothing for it to do.
+
+Snap and flatpak aren't wired in on purpose: `snap install` still needs root,
+and flatpak's `--user` mode only carries GUI apps. Docker is worth keeping in
+mind as a manual escape hatch — build an awkward binary in a container against a
+matching glibc and copy it into `~/.local/bin`.
+
 ## Caveats / not tracked here
 
 - **jrnl** journals live in `~/Documents/note/*.md` and the paths in
@@ -227,8 +271,8 @@ git diff        # review what --adopt changed, revert anything unwanted
 - **every installer is `have`-gated**, so bootstrap will not replace a tool you
   installed another way. On a box where these were set up by hand, the tool step
   is a no-op and versions/paths stay whatever you already had.
-- **kitty** and **spicetify** (desktop) install to `~/.local/` via their own
-  installers, invoked by `install/tools.sh --desktop`.
+- **kitty** (desktop) installs to `~/.local/kitty.app` via its own installer,
+  invoked by `install/tools.sh --desktop`.
 
 ## What gets installed
 
@@ -238,12 +282,18 @@ git diff        # review what --adopt changed, revert anything unwanted
   flameshot, autorandr, arandr, acpid, network-manager-gnome, blueman,
   brightnessctl, pulseaudio-utils.
 - **binaries (all):** neovim (latest stable), starship, jj, lazygit, lsd, jrnl,
-  plus `fd`/`bat` shims for Ubuntu's `fdfind`/`batcat`.
+  plus `fd`/`bat`/`jq` shims for Ubuntu's `fdfind`/`batcat` and for gojq.
 - **cargo (all):** whatever is in `install/packages-cargo.txt` — jj-cli, lsd,
-  tmux-sessionizer, cargo-update.
-- **go (all):** whatever is in `install/packages-go.txt` — sesh.
-- **binaries (desktop):** kitty, spicetify, and Nerd Fonts (CodeNewRoman,
-  Inconsolata, Go-Mono, Tinos) via `install/fonts.sh`.
+  tmux-sessionizer, cargo-update, plus apt fallbacks (ripgrep, fd-find, bat,
+  zoxide) that only build on a box apt couldn't serve.
+- **go (all):** whatever is in `install/packages-go.txt` — sesh, plus the fzf
+  and gojq fallbacks.
+- **binaries (desktop):** kitty and Nerd Fonts (CodeNewRoman, Inconsolata,
+  Go-Mono, Tinos) via `install/fonts.sh`.
+
+Nothing above needs root. `install/tools.sh` unpacks neovim into
+`~/.local/nvim` and Go into `~/.local/golang` (override the parent with
+`DOTFILES_PREFIX`); only apt and `install/laptop.sh` want sudo.
 
 ### Fonts on WSL
 

@@ -26,5 +26,5 @@ blueman                 # bluetooth tray
 brightnessctl           # XF86MonBrightness keys
 pulseaudio-utils        # pactl (volume keys); harmless if using pipewire
 
-# NOTE: kitty and spicetify are installed separately (see tools.sh),
+# NOTE: kitty is installed separately (see tools.sh),
 # and the wallpaper ~/Pictures/uw-background.jpg is NOT tracked here.

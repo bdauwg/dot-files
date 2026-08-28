@@ -26,9 +26,11 @@ fish_add_path $HOME/go/bin
 # rust
 fish_add_path $HOME/.cargo/bin
 
-# go toolchain (install/tools.sh puts it here); `go install` output goes to
+# go toolchain: /usr/local/go on machines bootstrapped before the unprivileged
+# refactor, ~/.local/golang on the ones after it. `go install` output goes to
 # ~/.local/bin via GOBIN, but ~/go/bin stays on PATH for anything installed by hand
-fish_add_path /usr/local/go/bin
+test -d /usr/local/go/bin; and fish_add_path /usr/local/go/bin
+test -d $HOME/.local/golang/bin; and fish_add_path $HOME/.local/golang/bin
 
 # NVM setup
 # set -Ux NVM_DIR "$HOME/.nvm"
@@ -53,7 +55,6 @@ end
 abbr --add jrnl " jrnl"
 
 
-fish_add_path $HOME/.spicetify
 fish_add_path $HOME/.local/kitty.app/bin
 
 zoxide init fish | source

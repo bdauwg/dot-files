@@ -4,12 +4,12 @@
 # Prebuilt binaries are preferred so a fresh machine needs no Rust/Go toolchain.
 #
 #   ./install/tools.sh            # install the common CLI tools
-#   ./install/tools.sh --desktop  # also install kitty + spicetify (GUI)
+#   ./install/tools.sh --desktop  # also install kitty + Nerd Fonts (GUI)
 set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 ARCH="$(uname -m)"                       # x86_64 | aarch64
-LOCAL_BIN="$HOME/.local/bin"
+LOCAL_BIN="$PREFIX/bin"                  # PREFIX comes from lib.sh (~/.local)
 mkdir -p "$LOCAL_BIN"
 
 # github_tag OWNER/REPO -> latest release tag (e.g. v1.2.3)
@@ -37,18 +37,21 @@ install_neovim() {
   # asset names changed across versions; fall back to the older name.
   curl -fsSL "$base/$asset" -o "$tmp/nvim.tgz" \
     || curl -fsSL "$base/nvim-linux64.tar.gz" -o "$tmp/nvim.tgz"
-  sudo rm -rf /opt/nvim
-  sudo mkdir -p /opt/nvim
-  sudo tar -xzf "$tmp/nvim.tgz" -C /opt/nvim --strip-components=1
-  sudo ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
-  rm -rf "$tmp"; ok "neovim -> /usr/local/bin/nvim"
+  # The tarball is relocatable, so unpack it under $PREFIX rather than /opt —
+  # that's the whole difference between needing root here and not.
+  rm -rf "$PREFIX/nvim"; mkdir -p "$PREFIX/nvim"
+  tar -xzf "$tmp/nvim.tgz" -C "$PREFIX/nvim" --strip-components=1
+  ln -sf "$PREFIX/nvim/bin/nvim" "$LOCAL_BIN/nvim"
+  rm -rf "$tmp"; ok "neovim -> $LOCAL_BIN/nvim"
 }
 
 install_starship() {
   have starship && { ok "starship present"; return; }
   info "installing starship"
-  curl -fsSL https://starship.rs/install.sh | sh -s -- --yes >/dev/null
-  ok "starship"
+  # -b is not optional: the installer defaults to /usr/local/bin and escalates
+  # with sudo on its own, which is a password prompt in the middle of a run.
+  curl -fsSL https://starship.rs/install.sh | sh -s -- --yes -b "$LOCAL_BIN" >/dev/null
+  ok "starship -> $LOCAL_BIN/starship"
 }
 
 install_jj() {
@@ -93,11 +96,14 @@ install_golang() {
   [ -n "$ver" ] || { warn "could not determine the current go version"; return 1; }
   local tmp; tmp="$(mktemp -d)"
   curl -fsSL "https://go.dev/dl/${ver}.linux-${goarch}.tar.gz" -o "$tmp/go.tgz"
-  sudo rm -rf /usr/local/go
-  sudo tar -C /usr/local -xzf "$tmp/go.tgz"
+  # $PREFIX/golang, not $PREFIX/go: go infers GOROOT from the binary's own path
+  # so the name is free, and "go" would collide with GOPATH if PREFIX is $HOME.
+  local dest="$PREFIX/golang"
+  rm -rf "$dest"; mkdir -p "$dest"
+  tar -C "$dest" --strip-components=1 -xzf "$tmp/go.tgz"
   rm -rf "$tmp"
-  export PATH="/usr/local/go/bin:$PATH"
-  ok "go ($ver) -> /usr/local/go"
+  export PATH="$dest/bin:$PATH"
+  ok "go ($ver) -> $dest"
 }
 
 # ---- package lists ---------------------------------------------------------
@@ -184,7 +190,10 @@ install_lazygit() {
 install_lsd() {
   have lsd && { ok "lsd present"; return; }
   # lsd is in apt on 24.04 (universe); use it if available, else GitHub .deb.
-  if apt-cache show lsd >/dev/null 2>&1; then
+  # Neither works unprivileged — but lsd is also in packages-cargo.txt, so the
+  # cargo step a few installers later picks it up. Just stand aside.
+  if ! can_sudo; then ok "lsd: leaving it to the cargo list"; return; fi
+  if have apt-cache && apt-cache show lsd >/dev/null 2>&1; then
     apt_install_missing lsd; return
   fi
   info "installing lsd (.deb from GitHub)"
@@ -209,13 +218,21 @@ install_jrnl() {
   ok "jrnl"
 }
 
-# fd/bat ship on Ubuntu as fdfind/batcat; add friendly `fd`/`bat` shims.
+# Give tools their upstream names when the distro renamed them, or when the
+# only available build is a compatible reimplementation. Runs twice in main():
+# before the package lists, so an apt-provided fdfind counts as `fd` and cargo
+# doesn't rebuild it from source; and after, to catch gojq.
 install_shims() {
   if have fdfind && ! have fd; then
     ln -sf "$(command -v fdfind)" "$LOCAL_BIN/fd"; ok "fd -> fdfind shim"
   fi
   if have batcat && ! have bat; then
     ln -sf "$(command -v batcat)" "$LOCAL_BIN/bat"; ok "bat -> batcat shim"
+  fi
+  # gojq is the no-apt route to jq. Near-drop-in, not identical — it differs on
+  # some edge cases — so it only ever fills in for a jq that isn't there.
+  if have gojq && ! have jq; then
+    ln -sf "$(command -v gojq)" "$LOCAL_BIN/jq"; ok "jq -> gojq shim"
   fi
 }
 
@@ -228,13 +245,6 @@ install_kitty() {
   ln -sf "$HOME/.local/kitty.app/bin/kitty" "$LOCAL_BIN/kitty"
   ln -sf "$HOME/.local/kitty.app/bin/kitten" "$LOCAL_BIN/kitten"
   ok "kitty"
-}
-
-install_spicetify() {
-  have spicetify && { ok "spicetify present"; return; }
-  info "installing spicetify"
-  curl -fsSL https://raw.githubusercontent.com/spicetify/cli/main/install.sh | sh
-  ok "spicetify"
 }
 
 install_fonts() { "$DOTFILES_DIR/install/fonts.sh"; }   # Nerd Fonts for the GUI terminal
@@ -265,13 +275,13 @@ main() {
   run_step install_lazygit
   run_step install_lsd
   run_step install_jrnl
+  run_step install_shims          # before: apt's fdfind/batcat satisfy fd/bat
   run_step install_cargo_packages
   run_step install_go_packages
-  run_step install_shims
+  run_step install_shims          # after: pick up gojq
 
   if [ "$desktop" = 1 ]; then
     run_step install_kitty
-    run_step install_spicetify
     run_step install_fonts
   fi
 

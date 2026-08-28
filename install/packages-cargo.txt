@@ -14,4 +14,14 @@ lsd                             # ls replacement; aliased to l/la/ll in config.f
 tmux-sessionizer:tms            # tmux session picker
 cargo-update:cargo-install-update  # `cargo install-update -a` to refresh these
 
+# --- apt fallbacks ---------------------------------------------------------
+# These normally come from packages-apt.txt. They're listed here too so a box
+# with no sudo still gets them; on a box that has apt they're already on PATH by
+# the time this runs, so nothing is built twice. (fd/bat are Ubuntu's
+# fdfind/batcat — install_shims runs first and makes those count.)
+ripgrep:rg
+fd-find:fd
+bat
+zoxide
+
 # alacritty                     # installed on the main box, but i3 launches kitty

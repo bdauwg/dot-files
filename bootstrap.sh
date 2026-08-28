@@ -3,6 +3,7 @@
 #
 #   ./bootstrap.sh                 # auto-detect profile, do everything
 #   ./bootstrap.sh --profile wsl   # force WSL profile (no GUI packages)
+#   ./bootstrap.sh --profile headless   # server / work box: no GUI packages
 #   ./bootstrap.sh --no-tools      # skip non-apt tool installs
 #   ./bootstrap.sh --no-chsh       # don't change the login shell to fish
 #   ./bootstrap.sh --link-only     # only (re)create the stow symlinks
@@ -12,6 +13,10 @@
 #
 # Safe to re-run: apt installs skip present packages, tool installers skip
 # present binaries, and `stow --restow` just refreshes symlinks.
+#
+# Runs without root. Anything apt would have supplied is reported and skipped
+# (DOTFILES_NO_SUDO=1 forces this path); the cargo and go lists in
+# install/tools.sh cover most of it. See "Machines without sudo" in the README.
 set -euo pipefail
 cd "$(dirname "$0")"
 source install/lib.sh
@@ -31,7 +36,9 @@ while [ $# -gt 0 ]; do
     *) die "unknown option: $1" ;;
   esac
 done
-case "$PROFILE" in desktop|wsl) ;; *) die "profile must be 'desktop' or 'wsl'";; esac
+case "$PROFILE" in desktop|wsl|headless) ;;
+  *) die "profile must be 'desktop', 'wsl' or 'headless'";; esac
+can_sudo || info "no sudo: apt steps will be skipped, tools go under $PREFIX"
 
 info "profile: $PROFILE   ($(. /etc/os-release; echo "$PRETTY_NAME"))"
 
@@ -49,6 +56,12 @@ if [ "$DO_APT" = 1 ]; then
     # shellcheck disable=SC2046
     apt_install_missing $(read_pkglist install/packages-apt-desktop.txt)
   fi
+  # apt_install_missing never fails the run — losing apt must not cost you the
+  # stow step, which is the part that actually needs to happen everywhere.
+  if [ ${#APT_SKIPPED[@]} -gt 0 ]; then
+    warn "apt supplied none of: ${APT_SKIPPED[*]}"
+    warn "the cargo/go lists cover most of these; fish and tmux they do not."
+  fi
 fi
 
 # ---- 2. non-apt tools ------------------------------------------------------
@@ -63,6 +76,7 @@ fi
 # ---- 3. link configs with stow --------------------------------------------
 if [ "$DO_LINK" = 1 ]; then
   have stow || apt_install_missing stow
+  have stow || die "stow is required to link the configs and could not be installed"
   local_pkgs=("${COMMON_PKGS[@]}")
   [ "$PROFILE" = desktop ] && local_pkgs+=("${DESKTOP_PKGS[@]}")
   info "linking: ${local_pkgs[*]}"
@@ -124,11 +138,23 @@ if [ "$DO_CHSH" = 1 ]; then
   elif [ "${SHELL:-}" = "$fish_path" ]; then
     ok "login shell already fish"
   else
-    grep -qx "$fish_path" /etc/shells || echo "$fish_path" | sudo tee -a /etc/shells >/dev/null
-    if chsh -s "$fish_path"; then
-      ok "login shell -> fish (re-login to take effect)"
-    else
-      warn "chsh failed; set manually: chsh -s $fish_path"
+    # chsh refuses a shell that isn't in /etc/shells, and only root can put it
+    # there — so on an unprivileged box this step is simply not available.
+    if ! grep -qx "$fish_path" /etc/shells 2>/dev/null; then
+      if can_sudo && echo "$fish_path" | sudo tee -a /etc/shells >/dev/null; then
+        ok "$fish_path added to /etc/shells"
+      else
+        warn "cannot add $fish_path to /etc/shells; leaving the login shell alone."
+        warn "exec fish from your login shell's rc instead — see the README."
+        DO_CHSH=0
+      fi
+    fi
+    if [ "$DO_CHSH" = 1 ]; then
+      if chsh -s "$fish_path"; then
+        ok "login shell -> fish (re-login to take effect)"
+      else
+        warn "chsh failed; set manually: chsh -s $fish_path"
+      fi
     fi
   fi
 fi
