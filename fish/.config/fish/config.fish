@@ -17,6 +17,13 @@ end
 if status is-interactive
     # Commands to run in interactive sessions can go here
     starship init fish | source
+
+    # vi mode, and the [N]/[I] indicator that comes with it. fish 4.3 moved
+    # this out of universal variables into a generated, machine-local
+    # conf.d/fish_frozen_key_bindings.fish — which is exactly why a new machine
+    # came up without it. Setting it here is what fish's own migration note
+    # recommends, and it's the only copy that travels.
+    set -g fish_key_bindings fish_vi_key_bindings
 end
 
 # user-local binaries (jj, sesh, lazygit, jrnl, fd/bat shims land here)

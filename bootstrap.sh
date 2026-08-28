@@ -130,6 +130,14 @@ if [ "$DO_LINK" = 1 ] && [ "$PROFILE" = desktop ] && is_laptop; then
   ./install/laptop.sh
 fi
 
+# ---- 3c. fish plugins -------------------------------------------------------
+# Also after linking: fisher reads ~/.config/fish/fish_plugins, which only
+# exists once stow has put it there. This is where fzf.fish, nvm.fish and bass
+# come from, so without it a new machine is missing all of their functions.
+if [ "$DO_LINK" = 1 ] && [ "$DO_TOOLS" = 1 ]; then
+  ./install/fish-plugins.sh || warn "fish plugins failed — re-run ./install/fish-plugins.sh"
+fi
+
 # ---- 4. default shell ------------------------------------------------------
 if [ "$DO_CHSH" = 1 ]; then
   fish_path="$(command -v fish || true)"

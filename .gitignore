@@ -1,11 +1,24 @@
 # jujutsu working metadata (this repo is jj-colocated on top of git)
 /.jj/
 
-# fish auto-generated state (we only track config.fish)
+# fish: allowlist. Everything in these directories is generated — by fisher
+# (the plugin functions and completions), by `conda init` (fish_prompt), by
+# rustup — and is reproduced on a new machine rather than tracked. Only the
+# hand-written files below are ours, so a new function needs a line here.
+# NB: the patterns end in /* rather than /. Git never descends into an excluded
+# directory, so a negation inside one would never be reconsidered.
 fish/.config/fish/fish_variables
-fish/.config/fish/completions/
-fish/.config/fish/functions/
-fish/.config/fish/conf.d/
+fish/.config/fish/completions/*
+fish/.config/fish/functions/*
+fish/.config/fish/conf.d/*
+!fish/.config/fish/functions/azlogin.fish
+!fish/.config/fish/functions/bazel-resync.fish
+!fish/.config/fish/functions/compile-commands.fish
+!fish/.config/fish/functions/fish_user_key_bindings.fish
+!fish/.config/fish/functions/note.fish
+!fish/.config/fish/functions/worklog.fish
+!fish/.config/fish/functions/xclip-kb.fish
+!fish/.config/fish/conf.d/fish_frozen_theme.fish
 
 # nvim plugin state managed by lazy.nvim (lazy-lock.json IS tracked)
 nvim/.config/nvim/lazy/
