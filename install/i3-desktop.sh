@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Laptop-only system config: lid behaviour and display hotplug.
+# i3-desktop system config: lid behaviour and display hotplug.
 #
 # These are the bits that can't be stow symlinks because they live outside $HOME
-# and have to be root-owned. Called by bootstrap.sh on a desktop-profile machine
-# that actually has a lid; safe to run directly and safe to re-run.
+# and have to be root-owned. This is the one part of the whole bootstrap that
+# needs sudo for something other than apt/chsh, so unlike everything else it is
+# opt-in: bootstrap.sh only calls it when passed --i3-desktop. Safe to run
+# directly and safe to re-run.
 #
-#   ./install/laptop.sh
+#   ./install/i3-desktop.sh
 set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 

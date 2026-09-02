@@ -8,6 +8,9 @@
 # default since 1.21) downloads the right one on first build.
 
 github.com/joshmedeski/sesh/v2@latest:sesh   # tmux session manager
+# lazygit's own docs steer people away from `go install` (the resulting binary
+# has no embedded version info), but it's otherwise a normal `go install`.
+github.com/jesseduffield/lazygit@latest:lazygit  # git TUI
 
 # --- apt fallbacks ---------------------------------------------------------
 # As in packages-cargo.txt: only ever built on a box where apt didn't supply

@@ -3,16 +3,18 @@
 # Format:  crate[:binary]
 # The optional binary name is what gets checked to decide "already installed" —
 # give it whenever it differs from the crate name. Anything already on PATH is
-# skipped, so a crate that also has a prebuilt installer in tools.sh (jj, lsd)
-# won't be rebuilt from source; delete the prebuilt installer if you'd rather
-# cargo own it.
+# skipped, so nothing here gets rebuilt just because it's already present from
+# some other install path.
 #
 # These build from source. Expect a fresh machine to sit here for a while.
+# Deliberate: everything in this file installs unprivileged, no sudo required.
 
-jj-cli:jj                       # jujutsu VCS (tools.sh installs a prebuilt first)
-lsd                             # ls replacement; aliased to l/la/ll in config.fish
+starship                        # shell prompt
+jj-cli:jj                       # jujutsu VCS
+lsd                             # ls replacement; aliased to l/la/ll in config.fish — no apt/deb path, cargo-only (no sudo)
 tmux-sessionizer:tms            # tmux session picker
 cargo-update:cargo-install-update  # `cargo install-update -a` to refresh these
+tree-sitter-cli:tree-sitter     # parser compiler CLI needed by nvim-treesitter's main branch
 
 # --- apt fallbacks ---------------------------------------------------------
 # These normally come from packages-apt.txt. They're listed here too so a box

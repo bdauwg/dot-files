@@ -7,9 +7,13 @@
 #   ./bootstrap.sh --no-tools      # skip non-apt tool installs
 #   ./bootstrap.sh --no-chsh       # don't change the login shell to fish
 #   ./bootstrap.sh --link-only     # only (re)create the stow symlinks
+#   ./bootstrap.sh --i3-desktop    # also run install/i3-desktop.sh (lid/dock
+#                                  # display config; root-owned files under
+#                                  # /etc — see the `display` package)
 #
-# On a laptop the desktop profile also installs lid/dock display handling
-# (install/laptop.sh) — see the `display` package.
+# --i3-desktop is opt-in and off by default: it's the one step in this whole
+# bootstrap that needs sudo for something other than apt/chsh, so it doesn't
+# run just because --profile desktop was auto-detected or passed.
 #
 # Safe to re-run: apt installs skip present packages, tool installers skip
 # present binaries, and `stow --restow` just refreshes symlinks.
@@ -23,7 +27,7 @@ source install/lib.sh
 
 # ---- args ------------------------------------------------------------------
 PROFILE="$(detect_profile)"
-DO_APT=1; DO_TOOLS=1; DO_LINK=1; DO_CHSH=1
+DO_APT=1; DO_TOOLS=1; DO_LINK=1; DO_CHSH=1; DO_I3_DESKTOP=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --profile) PROFILE="$2"; shift 2 ;;
@@ -32,6 +36,7 @@ while [ $# -gt 0 ]; do
     --no-tools) DO_TOOLS=0; shift ;;
     --no-chsh)  DO_CHSH=0; shift ;;
     --link-only) DO_APT=0; DO_TOOLS=0; DO_CHSH=0; shift ;;
+    --i3-desktop) DO_I3_DESKTOP=1; shift ;;
     -h|--help) awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
@@ -122,12 +127,13 @@ if [ "$DO_LINK" = 1 ]; then
   [ "$link_failed" = 1 ] && warn "some packages did not link — see the errors above"
 fi
 
-# ---- 3b. laptop-only system config -----------------------------------------
+# ---- 3b. i3-desktop system config (opt-in, --i3-desktop) -------------------
 # Lid policy, the autorandr hotplug fallback and the acpid lid hook live outside
 # $HOME and must be root-owned, so stow can't place them. Runs after linking
-# because the acpid hook calls ~/.local/bin/display-apply.
-if [ "$DO_LINK" = 1 ] && [ "$PROFILE" = desktop ] && is_laptop; then
-  ./install/laptop.sh
+# because the acpid hook calls ~/.local/bin/display-apply. Not run just because
+# --profile desktop was detected — see the note on --i3-desktop above.
+if [ "$DO_I3_DESKTOP" = 1 ] && [ "$DO_LINK" = 1 ]; then
+  ./install/i3-desktop.sh
 fi
 
 # ---- 3c. fish plugins -------------------------------------------------------

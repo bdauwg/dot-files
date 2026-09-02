@@ -25,7 +25,11 @@ github_tag() {
 
 # ---------------------------------------------------------------------------
 install_neovim() {
-  have nvim && { ok "neovim present ($(nvim --version | head -1))"; return; }
+  # Check our own managed copy, not `have nvim` — a stray system nvim (an old
+  # apt package, or one baked into the base image) satisfies `have` without
+  # ever being upgraded, which left this step skipping itself on machines
+  # that already had a too-old /usr/bin/nvim.
+  [ -x "$LOCAL_BIN/nvim" ] && { ok "neovim present ($("$LOCAL_BIN/nvim" --version | head -1))"; return; }
   info "installing neovim (latest stable)"
   local base="https://github.com/neovim/neovim/releases/latest/download"
   local asset tmp; tmp="$(mktemp -d)"
@@ -43,32 +47,6 @@ install_neovim() {
   tar -xzf "$tmp/nvim.tgz" -C "$PREFIX/nvim" --strip-components=1
   ln -sf "$PREFIX/nvim/bin/nvim" "$LOCAL_BIN/nvim"
   rm -rf "$tmp"; ok "neovim -> $LOCAL_BIN/nvim"
-}
-
-install_starship() {
-  have starship && { ok "starship present"; return; }
-  info "installing starship"
-  # -b is not optional: the installer defaults to /usr/local/bin and escalates
-  # with sudo on its own, which is a password prompt in the middle of a run.
-  curl -fsSL https://starship.rs/install.sh | sh -s -- --yes -b "$LOCAL_BIN" >/dev/null
-  ok "starship -> $LOCAL_BIN/starship"
-}
-
-install_jj() {
-  have jj && { ok "jj present"; return; }
-  info "installing jujutsu (jj)"
-  local tag; tag="$(github_tag jj-vcs/jj)"
-  local triple; case "$ARCH" in
-    x86_64)  triple="x86_64-unknown-linux-musl" ;;
-    aarch64) triple="aarch64-unknown-linux-musl" ;;
-    *) warn "no jj binary for $ARCH"; return ;;
-  esac
-  local tmp; tmp="$(mktemp -d)"
-  curl -fsSL "https://github.com/jj-vcs/jj/releases/download/${tag}/jj-${tag}-${triple}.tar.gz" \
-    -o "$tmp/jj.tgz"
-  tar -xzf "$tmp/jj.tgz" -C "$tmp"
-  install -m755 "$tmp/jj" "$LOCAL_BIN/jj"
-  rm -rf "$tmp"; ok "jj -> $LOCAL_BIN/jj"
 }
 
 # ---- toolchains ------------------------------------------------------------
@@ -170,46 +148,6 @@ install_go_packages() {
   return $rc
 }
 
-install_lazygit() {
-  have lazygit && { ok "lazygit present"; return; }
-  info "installing lazygit"
-  local tag ver; tag="$(github_tag jesseduffield/lazygit)"; ver="${tag#v}"
-  local arch; case "$ARCH" in
-    x86_64)  arch="x86_64" ;;
-    aarch64) arch="arm64" ;;
-    *) warn "no lazygit binary for $ARCH"; return ;;
-  esac
-  local tmp; tmp="$(mktemp -d)"
-  curl -fsSL "https://github.com/jesseduffield/lazygit/releases/download/${tag}/lazygit_${ver}_Linux_${arch}.tar.gz" \
-    -o "$tmp/lg.tgz"
-  tar -xzf "$tmp/lg.tgz" -C "$tmp" lazygit
-  install -m755 "$tmp/lazygit" "$LOCAL_BIN/lazygit"
-  rm -rf "$tmp"; ok "lazygit -> $LOCAL_BIN/lazygit"
-}
-
-install_lsd() {
-  have lsd && { ok "lsd present"; return; }
-  # lsd is in apt on 24.04 (universe); use it if available, else GitHub .deb.
-  # Neither works unprivileged — but lsd is also in packages-cargo.txt, so the
-  # cargo step a few installers later picks it up. Just stand aside.
-  if ! can_sudo; then ok "lsd: leaving it to the cargo list"; return; fi
-  if have apt-cache && apt-cache show lsd >/dev/null 2>&1; then
-    apt_install_missing lsd; return
-  fi
-  info "installing lsd (.deb from GitHub)"
-  local tag ver; tag="$(github_tag lsd-rs/lsd)"; ver="${tag#v}"
-  local arch; case "$ARCH" in
-    x86_64)  arch="amd64" ;;
-    aarch64) arch="arm64" ;;
-    *) warn "no lsd binary for $ARCH"; return ;;
-  esac
-  local tmp; tmp="$(mktemp -d)"
-  curl -fsSL "https://github.com/lsd-rs/lsd/releases/download/${tag}/lsd_${ver}_${arch}.deb" \
-    -o "$tmp/lsd.deb"
-  sudo dpkg -i "$tmp/lsd.deb" || sudo apt-get -f install -y
-  rm -rf "$tmp"; ok "lsd"
-}
-
 install_jrnl() {
   have jrnl && { ok "jrnl present"; return; }
   info "installing jrnl (pipx)"
@@ -270,10 +208,6 @@ main() {
   [ "${1:-}" = "--desktop" ] && desktop=1
 
   run_step install_neovim
-  run_step install_starship
-  run_step install_jj
-  run_step install_lazygit
-  run_step install_lsd
   run_step install_jrnl
   run_step install_shims          # before: apt's fdfind/batcat satisfy fd/bat
   run_step install_cargo_packages

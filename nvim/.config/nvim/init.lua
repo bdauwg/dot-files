@@ -1152,11 +1152,16 @@ require("lazy").setup({
 	},
 	{ -- Highlight, edit, and navigate code
 		"nvim-treesitter/nvim-treesitter",
+		branch = "main",
+		lazy = false, -- this plugin does not support lazy-loading
 		build = ":TSUpdate",
-		main = "nvim-treesitter.configs", -- Sets main module to use for opts
-		-- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-		opts = {
-			ensure_installed = {
+		-- [[ Configure Treesitter ]] See the README on the `main` branch: the old
+		-- `nvim-treesitter.configs` / opts (ensure_installed, auto_install,
+		-- highlight, indent) API is gone. Parsers are now compiled by the
+		-- `tree-sitter` CLI (see install/tools.sh), and highlight/fold/indent are
+		-- wired up by hand per filetype instead of a plugin-managed opt-in.
+		config = function()
+			local parsers = {
 				"bash",
 				"c",
 				"diff",
@@ -1169,22 +1174,27 @@ require("lazy").setup({
 				"query",
 				"vim",
 				"vimdoc",
-			},
-			-- Autoinstall languages that are not installed
-			auto_install = true,
-			highlight = {
-				enable = true,
-				-- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-				--  If you are experiencing weird indenting issues, add the language to
-				--  the list of additional_vim_regex_highlighting and disabled languages for indent.
-				additional_vim_regex_highlighting = { "ruby" },
-			},
-			indent = { enable = true, disable = { "ruby" } },
-		},
+			}
+			require("nvim-treesitter").install(parsers)
+
+			-- luadoc/markdown_inline are injected languages, not filetypes of their
+			-- own; vimdoc's filetype is "help". Everything else matches its parser name.
+			local filetypes = { "bash", "c", "diff", "dockerfile", "html", "lua", "markdown", "vim", "help", "query" }
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = filetypes,
+				callback = function()
+					vim.treesitter.start()
+					-- Not wiring up treesitter foldexpr here: this config uses
+					-- foldmethod=marker globally (see the {{{ }}} sections in this
+					-- very file), and foldexpr would silently override that on
+					-- every filetype above, including lua.
+					vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+				end,
+			})
+		end,
 		-- There are additional nvim-treesitter modules that you can use to interact
 		-- with nvim-treesitter. You should go explore a few and see what interests you:
 		--
-		--    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
 		--    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
 		--    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
 	},

@@ -64,9 +64,11 @@ Each top-level dir is a stow "package" mirroring `$HOME`:
 The `fish/` package is more than `config.fish` — see [Fish](#fish) for what's
 tracked there and what deliberately isn't.
 
-On a machine with a lid, the desktop profile additionally runs
-`install/laptop.sh`, which drops root-owned files (lid policy, the acpid hook)
-into `/etc` — see [Docking and monitors](#docking-and-monitors).
+`./bootstrap.sh --i3-desktop` additionally runs `install/i3-desktop.sh`, which
+drops root-owned files (lid policy, the acpid hook) into `/etc` — see
+[Docking and monitors](#docking-and-monitors). It's opt-in and not run just
+because `--profile desktop` was detected, since it's the one step in the whole
+bootstrap that needs sudo for something other than apt/chsh.
 
 ## Docking and monitors
 
@@ -129,7 +131,7 @@ lid-open from lid-closed and will match the same profile for both. So:
 
 ### Suspend on lid close
 
-`install/laptop.sh` installs `/etc/systemd/logind.conf.d/10-dotfiles-lid.conf`:
+`install/i3-desktop.sh` installs `/etc/systemd/logind.conf.d/10-dotfiles-lid.conf`:
 suspend on battery, **ignore** the lid on external power or docked. The
 external-power rule is what keeps the machine awake at the GDM greeter, so a
 docked boot with the lid shut reaches the login screen instead of suspending.
@@ -263,7 +265,8 @@ git diff        # review what --adopt changed, revert anything unwanted
 
 ## Machines without sudo
 
-Everything except apt and `install/laptop.sh` installs under `$HOME`, so a
+Everything except apt and `install/i3-desktop.sh` (opt-in via `--i3-desktop`)
+installs under `$HOME`, so a
 locked-down work box gets the same shell, editor and CLI tools:
 
 ```sh
@@ -295,9 +298,10 @@ Exec fish from your login shell's rc instead of `chsh`:
 case $- in *i*) [ -z "$FISH" ] && exec "$HOME/.local/bin/fish" ;; esac
 ```
 
-`install/laptop.sh` (lid policy, acpid hook) writes only to `/etc` and simply
-skips itself when there's no sudo — it has no unprivileged equivalent, and a
-headless box has nothing for it to do.
+`install/i3-desktop.sh` (lid policy, acpid hook; only runs when `--i3-desktop`
+is passed) writes only to `/etc` and simply skips itself when there's no sudo
+— it has no unprivileged equivalent, and a headless box has nothing for it to
+do anyway.
 
 Snap and flatpak aren't wired in on purpose: `snap install` still needs root,
 and flatpak's `--user` mode only carries GUI apps. Docker is worth keeping in
@@ -331,19 +335,21 @@ matching glibc and copy it into `~/.local/bin`.
 - **apt (desktop):** i3, i3status, i3lock, xss-lock, dex, rofi, dmenu, feh,
   flameshot, autorandr, arandr, acpid, network-manager-gnome, blueman,
   brightnessctl, pulseaudio-utils.
-- **binaries (all):** neovim (latest stable), starship, jj, lazygit, lsd, jrnl,
-  plus `fd`/`bat`/`jq` shims for Ubuntu's `fdfind`/`batcat` and for gojq.
-- **cargo (all):** whatever is in `install/packages-cargo.txt` — jj-cli, lsd,
-  tmux-sessionizer, cargo-update, plus apt fallbacks (ripgrep, fd-find, bat,
-  zoxide) that only build on a box apt couldn't serve.
-- **go (all):** whatever is in `install/packages-go.txt` — sesh, plus the fzf
-  and gojq fallbacks.
+- **binaries (all):** neovim (latest stable) and jrnl (pipx), plus
+  `fd`/`bat`/`jq` shims for Ubuntu's `fdfind`/`batcat` and for gojq.
+- **cargo (all):** whatever is in `install/packages-cargo.txt` — starship,
+  jj-cli, lsd, tree-sitter-cli, tmux-sessionizer, cargo-update, plus apt
+  fallbacks (ripgrep, fd-find, bat, zoxide) that only build on a box apt
+  couldn't serve.
+- **go (all):** whatever is in `install/packages-go.txt` — sesh, lazygit, plus
+  the fzf and gojq fallbacks.
 - **binaries (desktop):** kitty and Nerd Fonts (CodeNewRoman, Inconsolata,
   Go-Mono, Tinos) via `install/fonts.sh`.
 
-Nothing above needs root. `install/tools.sh` unpacks neovim into
-`~/.local/nvim` and Go into `~/.local/golang` (override the parent with
-`DOTFILES_PREFIX`); only apt and `install/laptop.sh` want sudo.
+Nothing above needs root — `install/tools.sh` never calls sudo. It unpacks
+neovim into `~/.local/nvim` and Go into `~/.local/golang` (override the parent
+with `DOTFILES_PREFIX`). Only apt and `install/i3-desktop.sh` (opt-in via
+`--i3-desktop`) want sudo.
 
 ### Fonts on WSL
 
