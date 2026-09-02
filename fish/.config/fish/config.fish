@@ -1,29 +1,15 @@
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-if test -f /home/bramos/miniconda3/bin/conda
-    eval /home/bramos/miniconda3/bin/conda "shell.fish" "hook" $argv | source
-else
-    # if test -f "/home/bramos/miniconda3/etc/fish/conf.d/conda.fish"
-    #     . "/home/bramos/miniconda3/etc/fish/conf.d/conda.fish"
-    # else
-    #     set -x PATH "/home/bramos/miniconda3/bin" $PATH
-    # end
-    if test -nf "/home/bramos/miniconda3/etc/fish/conf.d/conda.fish"
-        set -x PATH "/home/bramos/miniconda3/bin" $PATH
-    end
-end
-
-# <<< conda initialize <<<
 if status is-interactive
     # Commands to run in interactive sessions can go here
     starship init fish | source
 
-    # vi mode, and the [N]/[I] indicator that comes with it. fish 4.3 moved
-    # this out of universal variables into a generated, machine-local
-    # conf.d/fish_frozen_key_bindings.fish — which is exactly why a new machine
-    # came up without it. Setting it here is what fish's own migration note
-    # recommends, and it's the only copy that travels.
-    set -g fish_key_bindings fish_vi_key_bindings
+    # vi mode, and the [N]/[I] indicator that comes with it. Set once, as
+    # universal (persisted by fish itself), not re-set on every startup: a
+    # plain `set -g` here re-assigns fish_key_bindings fresh on every single
+    # session, mid-config-sourcing, which retriggers fish's key-binding
+    # reload at a point in the startup sequence that isn't equivalent to a
+    # pre-existing persisted value — confirmed to break fzf.fish's ctrl-r
+    # (and friends) taking effect, even though `bind` reports them correctly.
+    set -q fish_key_bindings; or set -U fish_key_bindings fish_vi_key_bindings
 end
 
 # user-local binaries (jj, sesh, lazygit, jrnl, fd/bat shims land here)
