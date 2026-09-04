@@ -49,6 +49,60 @@ install_neovim() {
   rm -rf "$tmp"; ok "neovim -> $LOCAL_BIN/nvim"
 }
 
+# fish 4 is the Rust rewrite, and the first fish to ship an official *static*
+# linux release — one relocatable file with its share/ data embedded, which is
+# what lets an unprivileged box run a current fish at all. fish 3.x had no such
+# build, so apt (and therefore sudo) was the only route; Ubuntu 24.04 still
+# tops out at 3.7.0.
+#
+# Being on 4 is not cosmetic. fish 4.0 replaced the old escape-sequence binds
+# (`bind \cr`) with named keys (`bind ctrl-r`), and fzf.fish v11 moved to that
+# syntax. fish 3.7 does not *reject* the new form — it binds the literal
+# characters c,t,r,l,-,r — so ctrl-r silently stops working with no error
+# anywhere, on a config that looks completely correct.
+fish_major() { "$1" --version 2>/dev/null | sed -n 's/^fish, version \([0-9][0-9]*\).*/\1/p'; }
+
+install_fish() {
+  # Version-gated, not `have`-gated: a system fish 3.7 satisfies `have fish`
+  # forever while being exactly the version we came here to replace — the same
+  # trap documented on install_neovim above.
+  local p major
+  if p="$(command -v fish)"; then
+    major="$(fish_major "$p")"
+    if [ "${major:-0}" -ge 4 ]; then
+      ok "fish present ($("$p" --version), $p)"; return
+    fi
+    info "fish ${major:-?} at $p predates the 4.0 bind syntax; installing 4.x"
+  else
+    info "installing fish (latest stable)"
+  fi
+
+  local tag asset tmp
+  tag="$(github_tag fish-shell/fish-shell)" || { warn "cannot reach the fish release API"; return 1; }
+  case "$ARCH" in
+    x86_64)  asset="fish-$tag-linux-x86_64.tar.xz" ;;
+    aarch64) asset="fish-$tag-linux-aarch64.tar.xz" ;;
+    *) warn "no prebuilt fish for $ARCH; build from source"; return ;;
+  esac
+  tmp="$(mktemp -d)"
+  curl -fsSL "https://github.com/fish-shell/fish-shell/releases/download/$tag/$asset" -o "$tmp/fish.tar.xz"
+  # The tarball holds the bare executable and nothing else — no prefix to strip.
+  tar -xJf "$tmp/fish.tar.xz" -C "$tmp"
+  install -m755 "$tmp/fish" "$LOCAL_BIN/fish"
+  rm -rf "$tmp"
+  ok "fish -> $LOCAL_BIN/fish ($("$LOCAL_BIN/fish" --version))"
+
+  # Winning on PATH is not the same as being the *login* shell: that's the
+  # absolute path recorded in /etc/passwd. If chsh still points at a 3.x, every
+  # login keeps starting it and the ctrl-r breakage survives this install.
+  local login_shell login_major
+  login_shell="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7 || true)"
+  login_major="$(fish_major "$login_shell" 2>/dev/null || true)"
+  if [ -n "$login_major" ] && [ "$login_major" -lt 4 ]; then
+    warn "login shell is still $login_shell (fish $login_major) — see 'Following fish to 4' in the README"
+  fi
+}
+
 # ---- toolchains ------------------------------------------------------------
 # Installed on demand: only when a package list actually needs them, so a box
 # that just wants the prebuilt binaries never pays for a compiler.
@@ -208,6 +262,7 @@ main() {
   [ "${1:-}" = "--desktop" ] && desktop=1
 
   run_step install_neovim
+  run_step install_fish
   run_step install_jrnl
   run_step install_shims          # before: apt's fdfind/batcat satisfy fd/bat
   run_step install_cargo_packages

@@ -178,6 +178,35 @@ it.
 The theme keeps fish's generated filename deliberately: `fish_config` writes to
 that path, so edits made in the web UI land in the repo through the symlink.
 
+### Following fish to 4
+
+`tools.sh` installs **fish 4** into `~/.local/bin`, because fish 3 can no longer
+run this config. fish 4.0 replaced escape-sequence binds (`bind \cr`) with named
+keys (`bind ctrl-r`), and fzf.fish v11 moved to that syntax. fish 3.7 does not
+reject the new form — it binds the literal characters `c`,`t`,`r`,`l`,`-`,`r` —
+so ctrl-r stops working with no error, on a config that reads as correct and
+whose `bind` output looks right. Ubuntu 24.04's apt still tops out at 3.7.0,
+which is how a machine ends up there.
+
+fish 4 is also what makes an unprivileged install possible at all: it is the
+first fish to ship an official *static* linux binary — one relocatable file with
+its share/ data embedded. There is no cargo or go path, and fish 3 had no such
+build, which is why apt used to be the only option.
+
+Installing it needs no sudo. Making it the **login shell** is the separate,
+pre-existing problem — `chsh` wants the path in `/etc/shells`, and only root
+puts it there — so on a locked-down box use the `~/.bashrc` exec line under
+[Machines without sudo](#machines-without-sudo) and skip `chsh` entirely. On a
+box where apt already installed fish and put `/usr/bin/fish` in `/etc/shells`,
+upgrading in place via `ppa:fish-shell/release-4` keeps the passwd entry valid
+and needs no shells-file edit. `install_fish` warns when a stale 3.x is still
+the login shell, since winning on `PATH` doesn't change what login starts.
+
+On first run, fish >= 4.3 writes `conf.d/fish_frozen_key_bindings.fish` and
+erases the universal `fish_key_bindings`. That file is redundant here — vi mode
+travels in `config.fish` (above) — so delete it; the `config.fish` check
+restores the variable on the next start.
+
 ### Plugins
 
 `fish_plugins` is the source of truth; the several dozen functions and
@@ -284,11 +313,11 @@ fallbacks for ripgrep, fd, bat, zoxide, fzf and jq, and those entries are
 `have`-gated, so on a normal machine apt wins and nothing is rebuilt from
 source.
 
-Two real gaps, both needing a prebuilt binary or a build from source:
+What's left needs a prebuilt binary or a build from source:
 
 | Missing | Why |
 |---------|-----|
-| `fish` | no cargo/go install path; the login-shell step is skipped too, since `chsh` needs the shell listed in `/etc/shells` |
+| `fish` | no cargo/go install path, but `tools.sh` fetches the official static binary — see [Following fish to 4](#following-fish-to-4). Only the login-shell step is skipped, since `chsh` needs the shell listed in `/etc/shells` |
 | `tmux` | C, not Rust or Go — build it, drop in a static binary, or move to zellij |
 
 Exec fish from your login shell's rc instead of `chsh`:
@@ -335,8 +364,10 @@ matching glibc and copy it into `~/.local/bin`.
 - **apt (desktop):** i3, i3status, i3lock, xss-lock, dex, rofi, dmenu, feh,
   flameshot, autorandr, arandr, acpid, network-manager-gnome, blueman,
   brightnessctl, pulseaudio-utils.
-- **binaries (all):** neovim (latest stable) and jrnl (pipx), plus
-  `fd`/`bat`/`jq` shims for Ubuntu's `fdfind`/`batcat` and for gojq.
+- **binaries (all):** neovim (latest stable), fish 4 (static, only when the
+  fish on PATH is older than 4 — see [Following fish to 4](#following-fish-to-4))
+  and jrnl (pipx), plus `fd`/`bat`/`jq` shims for Ubuntu's `fdfind`/`batcat`
+  and for gojq.
 - **cargo (all):** whatever is in `install/packages-cargo.txt` — starship,
   jj-cli, lsd, tree-sitter-cli, tmux-sessionizer, cargo-update, plus apt
   fallbacks (ripgrep, fd-find, bat, zoxide) that only build on a box apt
