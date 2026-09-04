@@ -2,14 +2,20 @@ if status is-interactive
     # Commands to run in interactive sessions can go here
     starship init fish | source
 
-    # vi mode, and the [N]/[I] indicator that comes with it. Set once, as
-    # universal (persisted by fish itself), not re-set on every startup: a
-    # plain `set -g` here re-assigns fish_key_bindings fresh on every single
-    # session, mid-config-sourcing, which retriggers fish's key-binding
-    # reload at a point in the startup sequence that isn't equivalent to a
-    # pre-existing persisted value — confirmed to break fzf.fish's ctrl-r
-    # (and friends) taking effect, even though `bind` reports them correctly.
-    set -q fish_key_bindings; or set -U fish_key_bindings fish_vi_key_bindings
+    # vi mode, and the [N]/[I] indicator that comes with it. Universal, so
+    # fish persists it, and only assigned when it's actually wrong -- a blind
+    # re-assign on every startup retriggers fish's key-binding reload mid-config
+    # and has been seen to break fzf.fish's ctrl-r taking effect.
+    #
+    # Compare the value rather than using `set -q`: fish's own
+    # __fish_config_interactive runs `__init_uvar fish_key_bindings
+    # fish_default_key_bindings` before the first prompt, i.e. *after* this file
+    # is sourced. On a machine whose fish_variables got wiped, fish therefore
+    # claims the variable first, and an existence check stays satisfied forever
+    # by the wrong value, silently leaving the shell in emacs mode.
+    if test "$fish_key_bindings" != fish_vi_key_bindings
+        set -U fish_key_bindings fish_vi_key_bindings
+    end
 end
 
 # user-local binaries (jj, sesh, lazygit, jrnl, fd/bat shims land here)
